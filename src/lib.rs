@@ -3,7 +3,7 @@ use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::Clamped;
-use web_sys::{CanvasRenderingContext2d, ImageData};
+use web_sys::{CanvasRenderingContext2d, ImageData, console};
 use nalgebra::{Vector3, Point3};
 
 use crate::sphere::Sphere;
@@ -36,8 +36,8 @@ pub fn start() {
     let width = canvas.client_width() as u32;
     let height = canvas.client_height() as u32;
 
-    let material = Material::new(
-        Vector3::new(0.0, 0.0, 0.0),
+    let emitter_material = Material::new(
+        Vector3::new(1.0, 1.0, 1.0),
         1.0,
         0.0,
         Vector3::new(3000.0, 3000.0, 3000.0),
@@ -46,8 +46,19 @@ pub fn start() {
         0.0
     );
 
+    let receiver_material = Material::new(
+        Vector3::new(1.0, 1.0, 1.0),
+        1.0,
+        0.0,
+        Vector3::new(0.0, 0.0, 0.0),
+        Vector3::new(0.4, 0.4, 0.4),
+        0.0,
+        0.0
+    );
+
     let objects = vec![
-        Sphere::new(Point3::new(0.0, 0.0, -5.0), 1.0, &material)
+        Sphere::new(Point3::new(-1.0, 0.0, -10.0), 1.0, emitter_material),
+        Sphere::new(Point3::new(1.0, 0.0, -10.0), 1.0, receiver_material)
     ];
 
     let camera = Camera::new(
@@ -62,7 +73,9 @@ pub fn start() {
     );
 
     let scene = Scene::new(objects, camera);
-    let tracer = Tracer::new(scene, 10, 2.2, width as usize, height as usize);
+    let tracer = Rc::new(RefCell::new(Tracer::new(scene, 10, 2.2, width as usize, height as usize)));
+    let tracer_clone = tracer.clone();
+    let tracer_clone_reader = tracer.clone();
 
     let canvas: web_sys::HtmlCanvasElement = canvas
         .dyn_into::<web_sys::HtmlCanvasElement>()
@@ -76,32 +89,28 @@ pub fn start() {
         .dyn_into::<web_sys::CanvasRenderingContext2d>()
         .unwrap();
 
-    let mut data = vec![0; (width*height*4) as usize];
+    let f = Rc::new(RefCell::new(None));
+    let g = f.clone();
+
+    *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
+        let mut tracer = tracer_clone.borrow_mut();
+        tracer.update();
+        request_animation_frame(f.borrow().as_ref().unwrap());
+    }) as Box<FnMut()>));
+
+    request_animation_frame(g.borrow().as_ref().unwrap());
 
     let f = Rc::new(RefCell::new(None));
     let g = f.clone();
 
-    let mut i = 0;
-    let pixel_count = ( width*height ) as usize;
     *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
-        if i >= pixel_count {
-            // Drop our handle to this closure so that it will get cleaned
-            // up once we return.
-            let _ = f.borrow_mut().take();
-            return;
-        }
+        let mut tracer = tracer_clone_reader.borrow_mut();
 
-        data[i*4 + 0] = 255;
-        data[i*4 + 1] = 0;
-        data[i*4 + 2] = 0;
-        data[i*4 + 3] = 255;
+        let image_data = ImageData::new_with_u8_clamped_array_and_sh(
+            Clamped(&mut tracer.pixels()), width, height).unwrap();
 
-        let image_data = ImageData::new_with_u8_clamped_array_and_sh(Clamped(&mut data), width, height).unwrap();
-        context.put_image_data(&image_data, 0.0, 0.0);
+        context.put_image_data(&image_data, 0.0, 0.0).expect("should have a value");
 
-        i += 1;
-
-        // Schedule ourself for another requestAnimationFrame callback.
         request_animation_frame(f.borrow().as_ref().unwrap());
     }) as Box<FnMut()>));
 

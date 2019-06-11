@@ -2,6 +2,7 @@ use nalgebra::{Vector3, Point3};
 use rand;
 use std::f32;
 use crate::ray::Ray;
+use web_sys::console;
 
 pub struct Camera {
     position: Point3<f32>,
@@ -43,6 +44,7 @@ impl Camera {
         let sensor_point = self.sensor_point(x, y, width, height);
         let focus_point = self.focus_point(sensor_point);
         let aperture_point = self.aperture_point();
+
         let direction = (focus_point - aperture_point).normalize();
         Ray{
             origin: self.position,
@@ -72,9 +74,9 @@ impl Camera {
         let aspect = width / height;
         let vx = ((x + rand::random::<f32>()) / width - 0.5) * aspect;
         let vy = (y + rand::random::<f32>()) / height - 0.5;
-        let sensorX = -vx * self.sensor;
-        let sensorY = vy * self.sensor;
-        Point3::new(sensorX, sensorY, self.image_distance)
+        let sensor_x = -vx * self.sensor;
+        let sensor_y = vy * self.sensor;
+        Point3::new(sensor_x, sensor_y, self.image_distance)
     }
 
     fn aperture_point(&self) -> Vector3<f32> {

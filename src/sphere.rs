@@ -3,14 +3,14 @@ use nalgebra::Point3;
 use crate::ray::Ray;
 use crate::material::Material;
 
-pub struct Sphere<'a> {
+pub struct Sphere {
     center: Point3<f32>,
     radius: f32,
-    material: &'a Material
+    material: Material
 }
 
-impl <'a> Sphere<'a> {
-    pub fn new(center: Point3<f32>, radius: f32, material: &'a Material) -> Self {
+impl Sphere {
+    pub fn new(center: Point3<f32>, radius: f32, material: Material) -> Self {
         Sphere{ center, radius, material }
     }
 
@@ -19,7 +19,7 @@ impl <'a> Sphere<'a> {
     }
 
     pub fn material(&self) -> &Material {
-        self.material
+        &self.material
     }
 
     pub fn intersection_distance(&self, ray: &Ray) -> f32 {

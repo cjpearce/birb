@@ -6,28 +6,28 @@ use nalgebra::{ Vector3, Point3 };
 
 
 pub struct Intersection<'a> {
-    hit: Point3<f32>,
-    normal: Vector3<f32>,
-    material: &'a Material,
-    distance: f32,
+    pub hit: Point3<f32>,
+    pub normal: Vector3<f32>,
+    pub material: &'a Material,
+    pub distance: f32,
 }
 
 struct Hit<'a> {
-    object: &'a Sphere<'a>,
+    object: &'a Sphere,
     distance: f32,
 }
 
-pub struct Scene<'a> {
-    camera: Camera,
-    objects: Vec<Sphere<'a>>
+pub struct Scene {
+    pub camera: Camera,
+    objects: Vec<Sphere>
 }
 
-impl <'a> Scene<'a> {
-    pub fn new(objects: Vec<Sphere<'a>>, camera: Camera) -> Scene<'a> {
+impl Scene {
+    pub fn new(objects: Vec<Sphere>, camera: Camera) -> Scene {
         Scene{ objects, camera }
     }
 
-    pub fn intersect(&'a self, ray: &Ray) -> Option<Intersection> {
+    pub fn intersect(&self, ray: &Ray) -> Option<Intersection> {
         let mut closest = None;
         for obj in self.objects.iter() {
             let dist = obj.intersection_distance(ray);
@@ -54,7 +54,7 @@ impl <'a> Scene<'a> {
         }
     }
 
-    pub fn bg(ray: &Ray) -> Vector3<f32> {
-        Vector3::new(0.0, 0.0, 0.0)
+    pub fn bg(&self, ray: &Ray) -> Vector3<f32> {
+        Vector3::new(1.0, 0.0, 0.0)
     }
 }

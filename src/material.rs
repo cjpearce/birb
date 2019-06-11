@@ -3,8 +3,8 @@ use std::f32;
 use rand;
 
 pub struct BSDF {
-    direction: Vector3<f32>,
-    signal: Vector3<f32>,
+    pub direction: Vector3<f32>,
+    pub signal: Vector3<f32>,
 }
 
 pub struct Material {
@@ -38,7 +38,7 @@ impl Material {
         }
     }
 
-    fn emit(&self, normal: &Vector3<f32>, direction: &Vector3<f32>) -> Option<Vector3<f32>> {
+    pub fn emit(&self, normal: &Vector3<f32>, direction: &Vector3<f32>) -> Option<Vector3<f32>> {
         if self.color.max() == 0f32 {
             return None;
         }
@@ -48,7 +48,7 @@ impl Material {
         Some(self.light * cos)
     }
 
-    fn bsdf(&self, normal: Vector3<f32>, direction: Vector3<f32>, length: f32) -> Option<BSDF> {
+    pub fn bsdf(&self, normal: Vector3<f32>, direction: Vector3<f32>, length: f32) -> Option<BSDF> {
         let entering = direction.dot(&normal) < 0f32;
         if entering {
             let reflect = self.schilck(&normal, &direction);

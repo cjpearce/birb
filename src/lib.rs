@@ -109,7 +109,6 @@ pub fn start() {
 
     let camera = Camera::new(
         Point3::new(0.0, 0.0, 7.0),
-        Vector3::new(0.0, 0.0, -1.0),
         0.024,
         0.040,
         15.0,
@@ -119,9 +118,7 @@ pub fn start() {
     );
 
     let scene = Scene::new(objects, camera);
-    let tracer = Rc::new(RefCell::new(Tracer::new(scene, 10, 2.2, width as usize, height as usize)));
-    let tracer_clone = tracer.clone();
-    let tracer_clone_reader = tracer.clone();
+    let mut tracer = Tracer::new(scene, 10, 2.2, width as usize, height as usize);
 
     let canvas: web_sys::HtmlCanvasElement = canvas
         .dyn_into::<web_sys::HtmlCanvasElement>()
@@ -135,27 +132,20 @@ pub fn start() {
         .dyn_into::<web_sys::CanvasRenderingContext2d>()
         .unwrap();
 
+    let mut data = vec![0u8; (width*height*4) as usize];
+    
     let f = Rc::new(RefCell::new(None));
     let g = f.clone();
+    let image_data = ImageData::new_with_u8_clamped_array_and_sh(
+            Clamped(&mut data),
+            width,
+            height
+        ).unwrap();
 
     *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
-        let mut tracer = tracer_clone.borrow_mut();
-        tracer.update();
-        request_animation_frame(f.borrow().as_ref().unwrap());
-    }) as Box<FnMut()>));
-
-    request_animation_frame(g.borrow().as_ref().unwrap());
-
-    let f = Rc::new(RefCell::new(None));
-    let g = f.clone();
-
-    *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
-        let mut tracer = tracer_clone_reader.borrow_mut();
-
-        let image_data = ImageData::new_with_u8_clamped_array_and_sh(
-            Clamped(&mut tracer.pixels()), width, height).unwrap();
-
-        context.put_image_data(&image_data, 0.0, 0.0).expect("should have a value");
+        tracer.update(&mut data);
+        context.put_image_data(&image_data, 0.0, 0.0)
+            .expect("should have a value");
 
         request_animation_frame(f.borrow().as_ref().unwrap());
     }) as Box<FnMut()>));

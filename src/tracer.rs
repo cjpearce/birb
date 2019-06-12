@@ -1,8 +1,6 @@
 use crate::scene::Scene;
 use crate::ray::Ray;
 use nalgebra::Vector3;
-use wasm_bindgen::JsCast;
-use wasm_bindgen::prelude::*;
 use nalgebra::Point2;
 use web_sys::console;
 
@@ -23,12 +21,10 @@ pub struct Tracer {
     width: usize,
     height: usize,
     exposures: Vec<PixelInfo>,
-    pixels: Vec<u8>,
     index: u32,
     adaptive: f32,
     tick_ms: f64,
     traces: usize,
-    window: web_sys::Window,
     performance: web_sys::Performance
 }
 
@@ -40,8 +36,7 @@ impl Tracer {
         width: usize,
         height: usize
     ) -> Tracer {
-        let window = window();
-        let performance = window.performance().expect("performance should be available");
+        let performance = window().performance().expect("performance should be available");
         Tracer{
             scene,
             bounces,
@@ -49,22 +44,20 @@ impl Tracer {
             width,
             height,
             exposures: vec![PixelInfo{color: Vector3::new(0.0, 0.0, 0.0), exposures: 0}; width*height],
-            pixels: vec![0; width*height*4],
             index: 0,
-            adaptive: 0.25,
+            adaptive: 0.010,
             tick_ms: 50.0,
             traces: 0,
-            window: window,
             performance: performance
         }
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self, pixels: &mut [u8]) {
         let start = self.performance.now();
         let end = start + self.tick_ms;
 
         loop {
-            self.expose();
+            self.expose(pixels);
             if self.performance.now() > end {
                 break;
             }
@@ -86,29 +79,24 @@ impl Tracer {
             .map(|e| e.color * (1.0 / e.exposures as f32))
     }
 
-    fn expose(&mut self) {
+    fn expose(&mut self, pixels: &mut [u8]) {
         let pixel = self.pixel_for_index(self.index);
         let rgba_index = pixel.x + pixel.y * self.width;
-        let limit = (self.index as f32 / (self.width as f32 * self.height as f32) + 1.0).ceil() as usize;
-        let mut last = self.average_at(&pixel).unwrap();
-
+        let limit = (self.index as f32 / (self.width as f32 * self.height as f32)).ceil() as usize + 1000;
+        
         for _ in 0..limit {
-            let light = self.trace(&pixel);
-
-            let noise = (light - last).norm() / (last.norm() + 1e-6);
-            let average = ave(&light);
-            last = Vector3::new(average, average, average);
-
-            self.exposures[rgba_index as usize].color += light;
+            let last = self.average_at(&pixel).unwrap();
+            let sample = self.trace(&pixel);
+            self.exposures[rgba_index as usize].color += sample;
             self.exposures[rgba_index as usize].exposures += 1;
-
-            self.traces += 1;
-            if noise < self.adaptive {
-                break;
-            }
+            let new = self.average_at(&pixel).unwrap();
+            
+            // if (new - last).abs().max() < 1e-3 {
+            //     break;
+            // }
         }
 
-        self.color_pixel(pixel);
+        self.color_pixel(pixel, pixels);
         self.index += 1;
     }
 
@@ -129,7 +117,7 @@ impl Tracer {
                     energy += light.component_mul(&signal);
                 }
 
-                let max = signal.max();
+                let max = signal.norm();
                 if dies(&mut signal, max) {
                     break;
                 }
@@ -153,23 +141,19 @@ impl Tracer {
         return energy
     }
 
-    fn color_pixel(&mut self, pixel: Point2<usize>) {
+    fn color_pixel(&mut self, pixel: Point2<usize>, pixels: &mut [u8]) {
         let index = (pixel.x + pixel.y * self.width) * 4;
         let average = self.average_at(&pixel);
         if let Some(average) = average {
-            self.pixels[index] = self.apply_gamma(average.x);
-            self.pixels[index + 1] = self.apply_gamma(average.y);
-            self.pixels[index + 2] = self.apply_gamma(average.z);
-            self.pixels[index + 3] = 255;
+            pixels[index] = self.apply_gamma(average.x);
+            pixels[index + 1] = self.apply_gamma(average.y);
+            pixels[index + 2] = self.apply_gamma(average.z);
+            pixels[index + 3] = 255;
         }
     }
 
     fn apply_gamma(&self, brightness: f32) -> u8 {
         ((brightness / 255.0).powf(1.0 / self.gamma) * 255.0).min(255.0) as u8
-    }
-
-    pub fn pixels(&mut self) -> &mut Vec<u8> {
-        &mut self.pixels
     }
 }
 

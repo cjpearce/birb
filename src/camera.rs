@@ -2,7 +2,6 @@ use nalgebra::{Vector3, Point3};
 use rand;
 use std::f32;
 use crate::ray::Ray;
-use web_sys::console;
 
 pub struct Camera {
     position: Point3<f32>,
@@ -19,7 +18,6 @@ pub struct Camera {
 impl Camera {
     pub fn new(
         position: Point3<f32>,
-        direction: Vector3<f32>,
         sensor: f32,
         focal_length: f32,
         focus: f32,

@@ -36,7 +36,7 @@ pub fn start() {
     let width = canvas.client_width() as u32;
     let height = canvas.client_height() as u32;
 
-    let emitter_material = Material::new(
+    let bright_light = Material::new(
         Vector3::new(1.0, 1.0, 1.0),
         1.0,
         0.0,
@@ -46,26 +46,72 @@ pub fn start() {
         0.0
     );
 
-    let receiver_material = Material::new(
+    let white_lambert = Material::new(
         Vector3::new(1.0, 1.0, 1.0),
         1.0,
         0.0,
         Vector3::new(0.0, 0.0, 0.0),
-        Vector3::new(0.4, 0.4, 0.4),
+        Vector3::new(0.03, 0.03, 0.03),
+        0.0,
+        0.0
+    );
+
+    let blue_plastic = Material::new(
+        Vector3::new(0.1, 0.1, 1.0),
+        1.0,
+        0.0,
+        Vector3::new(0.0, 0.0, 0.0),
+        Vector3::new(0.04, 0.04, 0.04),
+        0.0,
+        0.0
+    );
+
+    let red_plastic = Material::new(
+        Vector3::new(1.0, 0.0, 0.0),
+        1.0,
+        0.0,
+        Vector3::new(0.0, 0.0, 0.0),
+        Vector3::new(0.04, 0.04, 0.04),
+        0.0,
+        0.0
+    );
+
+    let silver = Material::new(
+        Vector3::new(0.972, 0.960, 0.915),
+        1.0,
+        0.0,
+        Vector3::new(0.0, 0.0, 0.0),
+        Vector3::new(0.972, 0.960, 0.915),
+        0.9,
+        1.0
+    );
+
+    let glass = Material::new(
+        Vector3::new(0.0, 0.0, 0.0),
+        1.6,
+        1.0,
+        Vector3::new(0.0, 0.0, 0.0),
+        Vector3::new(0.04, 0.04, 0.04),
         0.0,
         0.0
     );
 
     let objects = vec![
-        Sphere::new(Point3::new(-1.0, 0.0, -10.0), 1.0, emitter_material),
-        Sphere::new(Point3::new(1.0, 0.0, -10.0), 1.0, receiver_material)
+        Sphere::new(Point3::new(-1005.0, 0.0, -8.0), 1000.0, blue_plastic),
+        Sphere::new(Point3::new(1005.0, 0.0, -8.0), 1000.0, red_plastic),
+        Sphere::new(Point3::new(0.0, -1003.0, -8.0), 1000.0, white_lambert),
+        Sphere::new(Point3::new(0.0, 1003.0, -8.0), 1000.0, white_lambert),
+        Sphere::new(Point3::new(0.0, 0.0, -1010.0), 1000.0, white_lambert),
+        Sphere::new(Point3::new(0.0, 13.0, -8.0), 10.5, bright_light),
+        Sphere::new(Point3::new(1.0, -2.0, -7.0), 1.0, silver),
+        Sphere::new(Point3::new(-0.75, -2.0, -5.0), 1.0, glass)
     ];
 
     let camera = Camera::new(
-        Point3::new(0.0, 0.0, 0.0),
+        Point3::new(0.0, 0.0, 7.0),
         Vector3::new(0.0, 0.0, -1.0),
         0.024,
-        0.055,
+        0.040,
         15.0,
         1.4,
         0.0,

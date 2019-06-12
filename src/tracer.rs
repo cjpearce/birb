@@ -10,12 +10,6 @@ fn window() -> web_sys::Window {
     web_sys::window().expect("no global `window` exists")
 }
 
-fn request_animation_frame(f: &Closure<FnMut()>) {
-    window()
-        .request_animation_frame(f.as_ref().unchecked_ref())
-        .expect("should register `requestAnimationFrame` OK");
-}
-
 #[derive(Clone)]
 struct PixelInfo {
     color: Vector3<f32>,
@@ -34,6 +28,8 @@ pub struct Tracer {
     adaptive: f32,
     tick_ms: f64,
     traces: usize,
+    window: web_sys::Window,
+    performance: web_sys::Performance
 }
 
 impl Tracer {
@@ -44,6 +40,8 @@ impl Tracer {
         width: usize,
         height: usize
     ) -> Tracer {
+        let window = window();
+        let performance = window.performance().expect("performance should be available");
         Tracer{
             scene,
             bounces,
@@ -55,19 +53,19 @@ impl Tracer {
             index: 0,
             adaptive: 0.25,
             tick_ms: 50.0,
-            traces: 0
+            traces: 0,
+            window: window,
+            performance: performance
         }
     }
 
     pub fn update(&mut self) {
-        let window = window();
-        let performance = window.performance().expect("performance should be available");
-        let start = performance.now();
+        let start = self.performance.now();
         let end = start + self.tick_ms;
 
         loop {
             self.expose();
-            if performance.now() > end {
+            if self.performance.now() > end {
                 break;
             }
         }
@@ -78,27 +76,27 @@ impl Tracer {
         Point2::new( (wrapped as usize % self.width) as usize, (f32::floor(wrapped as f32 / self.width as f32)) as usize )
     }
 
-    fn average_at(&self, pixel: Point2<usize>) -> Option<Vector3<f32>> {
-        if pixel.x < 0 || pixel.x >= self.width || pixel.y < 0 || pixel.y >= self.height {
+    fn average_at(&self, pixel: &Point2<usize>) -> Option<Vector3<f32>> {
+        if pixel.x >= self.width || pixel.y >= self.height {
             return None;
         }
         
-        let index = pixel.x + pixel.y * self.width;
-        let exposure = self.exposures[index].clone();
-        Some(exposure.color * (1.0 / exposure.exposures as f32))
+        self.exposures
+            .get(pixel.x + pixel.y * self.width)
+            .map(|e| e.color * (1.0 / e.exposures as f32))
     }
 
     fn expose(&mut self) {
         let pixel = self.pixel_for_index(self.index);
         let rgba_index = pixel.x + pixel.y * self.width;
-        let limit = self.index as usize / (self.width * self.height) + 1;
-        let mut last = self.average_at(pixel).unwrap();
+        let limit = (self.index as f32 / (self.width as f32 * self.height as f32) + 1.0).ceil() as usize;
+        let mut last = self.average_at(&pixel).unwrap();
 
         for _ in 0..limit {
-            let light = self.trace(pixel);
+            let light = self.trace(&pixel);
 
             let noise = (light - last).norm() / (last.norm() + 1e-6);
-            let average = ave(light);
+            let average = ave(&light);
             last = Vector3::new(average, average, average);
 
             self.exposures[rgba_index as usize].color += light;
@@ -114,26 +112,20 @@ impl Tracer {
         self.index += 1;
     }
 
-    fn trace(&mut self, pixel: Point2<usize>) -> Vector3<f32> {
+    fn trace(&mut self, pixel: &Point2<usize>) -> Vector3<f32> {
         let mut ray = self.scene.camera.ray(
-            pixel.x as f32,
-            pixel.y as f32,
-            self.width as f32,
-            self.height as f32
+            pixel.x,
+            pixel.y,
+            self.width,
+            self.height
         );
-        let mut signal : Vector3<f32> = Vector3::new(1.0, 1.0, 1.0);
+        let mut signal = Vector3::new(1.0, 1.0, 1.0);
         let mut energy = Vector3::new(0.0, 0.0, 0.0);
 
         for _ in 0..self.bounces {
-            let intersection = self.scene.intersect(&ray);
-            if intersection.is_none() {
-                energy += self.scene.bg(&ray).component_mul(&signal);
-                break;
-            } else if let Some(intersect) = intersection {
-                let light = intersect.material
-                    .emit(&intersect.normal, &ray.direction);
-                
-                if let Some(light) = light {
+            if let Some(intersect) = self.scene.intersect(&ray) {
+                if let Some(light) = intersect.material
+                    .emit(&intersect.normal, &ray.direction) {
                     energy += light.component_mul(&signal);
                 }
 
@@ -142,18 +134,19 @@ impl Tracer {
                     break;
                 }
 
-                let sample = intersect.material.bsdf(
-                    intersect.normal,
-                    ray.direction,
+                if let Some(sample) = intersect.material.bsdf(
+                    &intersect.normal,
+                    &ray.direction,
                     intersect.distance
-                );
-
-                if sample.is_none() {
-                    break;
-                } else if let Some(sample) = sample {
+                ) {
                     ray = Ray{origin: intersect.hit, direction: sample.direction};
                     signal = signal.component_mul(&sample.signal);
+                } else {
+                    break;
                 }
+            } else {
+                energy += self.scene.bg(&ray).component_mul(&signal);
+                break;
             }
         }
         
@@ -162,7 +155,7 @@ impl Tracer {
 
     fn color_pixel(&mut self, pixel: Point2<usize>) {
         let index = (pixel.x + pixel.y * self.width) * 4;
-        let average = self.average_at(pixel);
+        let average = self.average_at(&pixel);
         if let Some(average) = average {
             self.pixels[index] = self.apply_gamma(average.x);
             self.pixels[index + 1] = self.apply_gamma(average.y);
@@ -180,18 +173,17 @@ impl Tracer {
     }
 }
 
-fn ave(v: Vector3<f32>) -> f32 {
+fn ave(v: &Vector3<f32>) -> f32 {
     ( v.x + v.y + v.z ) / 3.0
 }
 
 fn dies(v: &mut Vector3<f32>, chance: f32) -> bool {
     if rand::random::<f32>() > chance {
-        return true;
+        true
+    } else {
+        v.x /= chance;
+        v.y /= chance;
+        v.z /= chance;
+        false
     }
-
-    v.x /= chance;
-    v.y /= chance;
-    v.z /= chance;
-
-    false
 }

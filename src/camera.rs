@@ -40,7 +40,7 @@ impl Camera {
         }
     }
 
-    pub fn ray(&self, x: f32, y: f32, width: f32, height: f32) -> Ray {
+    pub fn ray(&self, x: usize, y: usize, width: usize, height: usize) -> Ray {
         let sensor_point = self.sensor_point(x, y, width, height);
         let focus_point = self.focus_point(sensor_point);
         let aperture_point = self.aperture_point();
@@ -70,10 +70,10 @@ impl Camera {
         lens_world_ray.direction * focus_ratio
     }
 
-    fn sensor_point(&self, x: f32, y: f32, width: f32, height: f32) -> Point3<f32> {
-        let aspect = width / height;
-        let vx = ((x + rand::random::<f32>()) / width - 0.5) * aspect;
-        let vy = (y + rand::random::<f32>()) / height - 0.5;
+    fn sensor_point(&self, x: usize, y: usize, width: usize, height: usize) -> Point3<f32> {
+        let aspect = width as f32 / height as f32;
+        let vx = ((x as f32 + rand::random::<f32>()) / width as f32 - 0.5) * aspect;
+        let vy = (y as f32 + rand::random::<f32>()) / height as f32 - 0.5;
         let sensor_x = -vx * self.sensor;
         let sensor_y = vy * self.sensor;
         Point3::new(sensor_x, sensor_y, self.image_distance)

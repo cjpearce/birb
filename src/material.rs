@@ -1,12 +1,14 @@
 use nalgebra::{Vector3, Unit, geometry::Reflection};
 use std::f32;
 use rand;
+use web_sys::console;
 
 pub struct BSDF {
     pub direction: Vector3<f32>,
     pub signal: Vector3<f32>,
 }
 
+#[derive(Copy, Clone)]
 pub struct Material {
     color: Vector3<f32>,
     refraction: f32,
@@ -39,24 +41,23 @@ impl Material {
     }
 
     pub fn emit(&self, normal: &Vector3<f32>, direction: &Vector3<f32>) -> Option<Vector3<f32>> {
-        if self.color.max() == 0f32 {
-            return None;
+        if self.light.max() == 0f32 {
+            None
+        } else {
+            let inverted = -direction;
+            Some(self.light * f32::max(normal.dot(&inverted), 0f32))
         }
-
-        let inverted = -direction;
-        let cos = f32::max(normal.dot(&inverted), 0f32);
-        Some(self.light * cos)
     }
 
-    pub fn bsdf(&self, normal: Vector3<f32>, direction: Vector3<f32>, length: f32) -> Option<BSDF> {
+    pub fn bsdf(&self, normal: &Vector3<f32>, direction: &Vector3<f32>, length: f32) -> Option<BSDF> {
         let entering = direction.dot(&normal) < 0f32;
         if entering {
             let reflect = self.schilck(&normal, &direction);
             let roughness = 1.0 - self.gloss;
 
             if rand::random::<f32>() <= ave(reflect) {
-                let reflection = Reflection::new(Unit::new_normalize(normal), 0.0);
-                let mut reflected = direction;
+                let reflection = Reflection::new(Unit::new_normalize(normal.clone()), 0.0);
+                let mut reflected = direction.clone();
                 reflection.reflect(&mut reflected);
                 reflected += random_in_cone(&normal, roughness);
                 let tint = Vector3::new(1.0, 1.0, 1.0).lerp(&self.frensel, self.metal);
@@ -103,7 +104,7 @@ impl Material {
         let cos_incident = (-incident).dot(&normal);
         self.frensel + (
             (
-                Vector3::new(1.0, 1.0, 1.0) - self.frensel
+                (Vector3::new(1.0, 1.0, 1.0) - self.frensel)
                 * (1.0 - cos_incident).powf(5.0)
             )
         )
@@ -142,7 +143,7 @@ fn random_in_sphere() -> Vector3<f32> {
     )
 }
 
-fn random_in_cos_hemisphere(normal: Vector3<f32>) -> Vector3<f32> {
+fn random_in_cos_hemisphere(normal: &Vector3<f32>) -> Vector3<f32> {
     let u = rand::random::<f32>();
     let v = rand::random::<f32>();
     let r = u.sqrt();
@@ -153,7 +154,7 @@ fn random_in_cos_hemisphere(normal: Vector3<f32>) -> Vector3<f32> {
     let mut d = Vector3::new(0.0, 0.0, 0.0);
     d += s * (r * theta.cos());
     d += t * (r * theta.sin());
-    d + normal * (1.0 - u).sqrt();
+    d += normal * (1.0 - u).sqrt();
     d
 }
 

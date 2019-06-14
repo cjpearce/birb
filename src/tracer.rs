@@ -17,12 +17,11 @@ struct PixelInfo {
 pub struct Tracer {
     scene: Scene,
     bounces: u32,
-    gamma: f64,
+    reciprocal_gamma: f64,
     width: usize,
     height: usize,
     exposures: Vec<PixelInfo>,
-    index: u32,
-    adaptive: f64,
+    index: usize,
     tick_ms: f64,
     traces: usize,
     performance: web_sys::Performance
@@ -40,12 +39,11 @@ impl Tracer {
         Tracer{
             scene,
             bounces,
-            gamma,
+            reciprocal_gamma: 1.0/gamma,
             width,
             height,
             exposures: vec![PixelInfo{color: Vector3::new(0.0, 0.0, 0.0), exposures: 0}; width*height],
             index: 0,
-            adaptive: 0.010,
             tick_ms: 50.0,
             traces: 0,
             performance: performance
@@ -57,16 +55,17 @@ impl Tracer {
         let end = start + self.tick_ms;
 
         loop {
-            self.expose(pixels);
+            let limit = (self.index / (self.width * self.height)) + 1;
+            self.expose(limit, pixels);
             if self.performance.now() > end {
                 break;
             }
         }
     }
 
-    fn pixel_for_index(&self, index: u32) -> Point2<usize> {
-        let wrapped = index % (self.width * self.height) as u32;
-        Point2::new( (wrapped as usize % self.width) as usize, (f64::floor(wrapped as f64 / self.width as f64)) as usize )
+    fn pixel_for_index(&self, index: usize) -> Point2<usize> {
+        let wrapped = index % (self.width * self.height);
+        Point2::new( wrapped % self.width, wrapped / self.width )
     }
 
     fn average_at(&self, pixel: &Point2<usize>) -> Option<Vector3<f64>> {
@@ -79,10 +78,9 @@ impl Tracer {
             .map(|e| e.color * (1.0 / e.exposures as f64))
     }
 
-    fn expose(&mut self, pixels: &mut [u8]) {
+    fn expose(&mut self, limit: usize, pixels: &mut [u8]) {
         let pixel = self.pixel_for_index(self.index);
         let rgba_index = pixel.x + pixel.y * self.width;
-        let limit = (self.index as f64 / (self.width as f64 * self.height as f64)).ceil() as usize + 10;
 
         for _ in 0..limit {
             let sample = self.trace(&pixel);
@@ -101,6 +99,7 @@ impl Tracer {
             self.width,
             self.height
         );
+        
         let mut signal = Vector3::new(1.0, 1.0, 1.0);
         let mut energy = Vector3::new(0.0, 0.0, 0.0);
 
@@ -147,7 +146,7 @@ impl Tracer {
     }
 
     fn apply_gamma(&self, brightness: f64) -> u8 {
-        ((brightness / 255.0).powf(1.0 / self.gamma) * 255.0).min(255.0) as u8
+        ((brightness / 255.0).powf(self.reciprocal_gamma) * 255.0).min(255.0) as u8
     }
 }
 

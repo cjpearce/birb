@@ -1,7 +1,6 @@
 use nalgebra::{Vector3, Unit, geometry::Reflection};
 use std::f64;
 use rand;
-use web_sys::console;
 
 pub struct BSDF {
     pub direction: Vector3<f64>,
@@ -44,8 +43,7 @@ impl Material {
         if self.light.max() == 0f64 {
             None
         } else {
-            let inverted = -direction;
-            Some(self.light * f64::max(normal.dot(&inverted), 0f64))
+            Some(self.light * f64::max(normal.dot(&-direction), 0f64))
         }
     }
 
@@ -61,42 +59,36 @@ impl Material {
                 reflection.reflect(&mut reflected1);
                 let reflected = random_in_cone(&reflected1, roughness);
                 let tint = Vector3::new(1.0, 1.0, 1.0).lerp(&self.frensel, self.metal);
-                return Some(BSDF{
+                Some(BSDF{
                     direction: reflected,
                     signal: tint,
                 })
-            }
-
-            if rand::random::<f64>() <= self.transparency {
+            } else if rand::random::<f64>() <= self.transparency {
                 let transmitted = direction.refraction(&normal, 1.0, self.refraction).unwrap();
-                return Some(BSDF{
+                Some(BSDF{
                     direction: transmitted,
                     signal: Vector3::new(1.0, 1.0, 1.0)
                 })
+            } else if rand::random::<f64>() <= self.metal {
+                None
+            } else {
+                let diffused = random_in_cos_hemisphere(normal);
+                let pdf = std::f64::consts::PI;
+
+                Some(BSDF{
+                    direction: diffused,
+                    signal: self.color * (1.0 / pdf)
+                })
             }
-
-            if rand::random::<f64>() <= self.metal {
-                return None
-            }
-
-            let diffused = random_in_cos_hemisphere(normal);
-            let pdf = std::f64::consts::PI;
-
-            Some(BSDF{
-                direction: diffused,
-                signal: self.color * (1.0 / pdf)
-            })
-        } else {
-            let exited = direction.refraction(
-                &-normal, self.refraction, 1.0
-            );
-            
-            if exited.is_none() { return None }
-
+        } else if let Some(exited) = direction.refraction(
+            &-normal, self.refraction, 1.0
+        ) {
             let opacity = 1.0 - self.transparency;
             let volume = f64::min(opacity * length * length, 1.0);
             let tint = Vector3::new(1.0, 1.0, 1.0).lerp(&self.color, volume);
-            Some(BSDF{ direction: exited.unwrap(), signal: tint })
+            Some(BSDF{ direction: exited, signal: tint })
+        } else {
+            None
         }
     }
 }
@@ -179,11 +171,7 @@ impl LightDirection for Vector3<f64> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::sphere::Sphere;
-    use crate::camera::Camera;
-    use crate::material::Material;
-    use crate::ray::Ray;
-    use nalgebra::{Point3, Vector3};
+    use nalgebra::{Vector3};
 
     #[test]
     fn schilck_is_correct() {

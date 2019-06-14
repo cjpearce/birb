@@ -37,9 +37,9 @@ pub fn start() {
     let height = canvas.client_height() as u32;
 
     let bright_light = Material::new(
-        Vector3::new(1.0, 1.0, 1.0),
+        Vector3::new(0.0, 0.0, 0.0),
         1.0,
-        0.0,
+        1.0,
         Vector3::new(3000.0, 3000.0, 3000.0),
         Vector3::new(0.0, 0.0, 0.0),
         0.0,
@@ -63,7 +63,7 @@ pub fn start() {
         Vector3::new(0.0, 0.0, 0.0),
         Vector3::new(0.04, 0.04, 0.04),
         0.0,
-        0.0
+        0.2
     );
 
     let red_plastic = Material::new(
@@ -73,7 +73,7 @@ pub fn start() {
         Vector3::new(0.0, 0.0, 0.0),
         Vector3::new(0.04, 0.04, 0.04),
         0.0,
-        0.0
+        0.2
     );
 
     let silver = Material::new(

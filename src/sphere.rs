@@ -1,20 +1,20 @@
-use std::f32;
+use std::f64;
 use nalgebra::Point3;
 use crate::ray::Ray;
 use crate::material::Material;
 
 pub struct Sphere {
-    center: Point3<f32>,
-    radius: f32,
+    center: Point3<f64>,
+    radius: f64,
     material: Material
 }
 
 impl Sphere {
-    pub fn new(center: Point3<f32>, radius: f32, material: Material) -> Self {
+    pub fn new(center: Point3<f64>, radius: f64, material: Material) -> Self {
         Sphere{ center, radius, material }
     }
 
-    pub fn center(&self) -> Point3<f32> {
+    pub fn center(&self) -> Point3<f64> {
         self.center
     }
 
@@ -22,17 +22,16 @@ impl Sphere {
         &self.material
     }
 
-    pub fn intersection_distance(&self, ray: &Ray) -> f32 {
+    pub fn intersection_distance(&self, ray: &Ray) -> f64 {
         let bias = 1e-6;
         let op = self.center - ray.origin;
         let b = op.dot(&ray.direction);
         let det = b * b - op.dot(&op) + self.radius * self.radius;
-        if det < 0f32 {
-            return f32::INFINITY;
+        if det < 0f64 {
+            return f64::INFINITY;
         }
 
         let det_root = det.sqrt();
-
         let t1 = b - det_root;
         if t1 > bias {
             return t1;
@@ -43,6 +42,6 @@ impl Sphere {
             return t2;
         }
 
-        f32::INFINITY
+        f64::INFINITY
     }
 }

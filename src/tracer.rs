@@ -10,19 +10,19 @@ fn window() -> web_sys::Window {
 
 #[derive(Clone)]
 struct PixelInfo {
-    color: Vector3<f32>,
+    color: Vector3<f64>,
     exposures: u32
 }
 
 pub struct Tracer {
     scene: Scene,
     bounces: u32,
-    gamma: f32,
+    gamma: f64,
     width: usize,
     height: usize,
     exposures: Vec<PixelInfo>,
     index: u32,
-    adaptive: f32,
+    adaptive: f64,
     tick_ms: f64,
     traces: usize,
     performance: web_sys::Performance
@@ -32,7 +32,7 @@ impl Tracer {
     pub fn new(
         scene: Scene,
         bounces: u32,
-        gamma: f32,
+        gamma: f64,
         width: usize,
         height: usize
     ) -> Tracer {
@@ -66,41 +66,35 @@ impl Tracer {
 
     fn pixel_for_index(&self, index: u32) -> Point2<usize> {
         let wrapped = index % (self.width * self.height) as u32;
-        Point2::new( (wrapped as usize % self.width) as usize, (f32::floor(wrapped as f32 / self.width as f32)) as usize )
+        Point2::new( (wrapped as usize % self.width) as usize, (f64::floor(wrapped as f64 / self.width as f64)) as usize )
     }
 
-    fn average_at(&self, pixel: &Point2<usize>) -> Option<Vector3<f32>> {
+    fn average_at(&self, pixel: &Point2<usize>) -> Option<Vector3<f64>> {
         if pixel.x >= self.width || pixel.y >= self.height {
             return None;
         }
         
         self.exposures
             .get(pixel.x + pixel.y * self.width)
-            .map(|e| e.color * (1.0 / e.exposures as f32))
+            .map(|e| e.color * (1.0 / e.exposures as f64))
     }
 
     fn expose(&mut self, pixels: &mut [u8]) {
         let pixel = self.pixel_for_index(self.index);
         let rgba_index = pixel.x + pixel.y * self.width;
-        let limit = (self.index as f32 / (self.width as f32 * self.height as f32)).ceil() as usize + 1000;
-        
+        let limit = (self.index as f64 / (self.width as f64 * self.height as f64)).ceil() as usize + 10;
+
         for _ in 0..limit {
-            let last = self.average_at(&pixel).unwrap();
             let sample = self.trace(&pixel);
             self.exposures[rgba_index as usize].color += sample;
             self.exposures[rgba_index as usize].exposures += 1;
-            let new = self.average_at(&pixel).unwrap();
-            
-            // if (new - last).abs().max() < 1e-3 {
-            //     break;
-            // }
         }
 
         self.color_pixel(pixel, pixels);
         self.index += 1;
     }
 
-    fn trace(&mut self, pixel: &Point2<usize>) -> Vector3<f32> {
+    fn trace(&mut self, pixel: &Point2<usize>) -> Vector3<f64> {
         let mut ray = self.scene.camera.ray(
             pixel.x,
             pixel.y,
@@ -152,17 +146,13 @@ impl Tracer {
         }
     }
 
-    fn apply_gamma(&self, brightness: f32) -> u8 {
+    fn apply_gamma(&self, brightness: f64) -> u8 {
         ((brightness / 255.0).powf(1.0 / self.gamma) * 255.0).min(255.0) as u8
     }
 }
 
-fn ave(v: &Vector3<f32>) -> f32 {
-    ( v.x + v.y + v.z ) / 3.0
-}
-
-fn dies(v: &mut Vector3<f32>, chance: f32) -> bool {
-    if rand::random::<f32>() > chance {
+fn dies(v: &mut Vector3<f64>, chance: f64) -> bool {
+    if rand::random::<f64>() > chance {
         true
     } else {
         v.x /= chance;

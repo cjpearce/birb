@@ -1,9 +1,3 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsCast;
-use wasm_bindgen::Clamped;
-use web_sys::{CanvasRenderingContext2d, ImageData, console};
 use nalgebra::{Vector3, Point3};
 
 use crate::sphere::Sphere;
@@ -11,6 +5,8 @@ use crate::material::Material;
 use crate::scene::Scene;
 use crate::camera::Camera;
 use crate::tracer::Tracer;
+use crate::canvas_renderer::CanvasRenderer;
+use wasm_bindgen::prelude::*;
 
 mod sphere;
 mod ray;
@@ -18,24 +14,10 @@ mod material;
 mod camera;
 mod scene;
 mod tracer;
-
-fn window() -> web_sys::Window {
-    web_sys::window().expect("no global `window` exists")
-}
-
-fn request_animation_frame(f: &Closure<FnMut()>) {
-    window()
-        .request_animation_frame(f.as_ref().unchecked_ref())
-        .expect("should register `requestAnimationFrame` OK");
-}
+mod canvas_renderer;
 
 #[wasm_bindgen(start)]
 pub fn start() {
-    let document = web_sys::window().unwrap().document().unwrap();
-    let canvas = document.get_element_by_id("canvas").unwrap();
-    let width = canvas.client_width() as u32;
-    let height = canvas.client_height() as u32;
-
     let bright_light = Material::new(
         Vector3::new(0.0, 0.0, 0.0),
         1.0,
@@ -118,37 +100,15 @@ pub fn start() {
     );
 
     let scene = Scene::new(objects, camera);
-    let mut tracer = Tracer::new(scene, 10, 2.2, width as usize, height as usize);
+    let canvas_renderer = CanvasRenderer::new("canvas");
 
-    let canvas: web_sys::HtmlCanvasElement = canvas
-        .dyn_into::<web_sys::HtmlCanvasElement>()
-        .map_err(|_| ())
-        .unwrap();
+    let tracer = Tracer::new(
+        scene,
+        10,
+        2.2,
+        canvas_renderer.width(),
+        canvas_renderer.height()
+    );
 
-    let context = canvas
-        .get_context("2d")
-        .unwrap()
-        .unwrap()
-        .dyn_into::<web_sys::CanvasRenderingContext2d>()
-        .unwrap();
-
-    let mut data = vec![0u8; (width*height*4) as usize];
-    
-    let f = Rc::new(RefCell::new(None));
-    let g = f.clone();
-    let image_data = ImageData::new_with_u8_clamped_array_and_sh(
-            Clamped(&mut data),
-            width,
-            height
-        ).unwrap();
-
-    *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
-        tracer.update(&mut data);
-        context.put_image_data(&image_data, 0.0, 0.0)
-            .expect("should have a value");
-
-        request_animation_frame(f.borrow().as_ref().unwrap());
-    }) as Box<FnMut()>));
-
-    request_animation_frame(g.borrow().as_ref().unwrap());
+    canvas_renderer.start(tracer);
 }

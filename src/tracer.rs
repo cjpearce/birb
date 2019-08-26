@@ -84,11 +84,6 @@ impl Tracer {
                     energy += light.component_mul(&signal);
                 }
 
-                let max = signal.norm();
-                if dies(&mut signal, max) {
-                    break;
-                }
-
                 if let Some(sample) =
                     intersect
                         .material
@@ -102,6 +97,11 @@ impl Tracer {
                 } else {
                     break;
                 }
+
+                let max = signal.norm();
+                if dies(&mut signal, max) {
+                    break;
+                }
             } else {
                 energy += self.scene.bg(&ray).component_mul(&signal);
                 break;
@@ -113,15 +113,17 @@ impl Tracer {
 
     fn color_pixel(&mut self, pixel: Point2<usize>, pixels: &mut [u8]) {
         let index = (pixel.x + pixel.y * self.width) * 4;
-        let average = self.average_at(&pixel);
-        pixels[index] = self.apply_gamma(average.x);
-        pixels[index + 1] = self.apply_gamma(average.y);
-        pixels[index + 2] = self.apply_gamma(average.z);
+        let average = self.apply_gamma(self.average_at(&pixel));
+        pixels[index] = average.x as u8;
+        pixels[index + 1] = average.y as u8;
+        pixels[index + 2] = average.z as u8;
         pixels[index + 3] = 255;
     }
 
-    fn apply_gamma(&self, brightness: f64) -> u8 {
-        ((brightness / 255.0).powf(self.reciprocal_gamma) * 255.0).min(255.0) as u8
+    fn apply_gamma(&self, pixel: Vector3<f64>) -> Vector3<f64> {
+        (pixel / 255.0)
+            .apply_into(|v| v.powf(self.reciprocal_gamma).min(1.0))
+            * 255.0
     }
 }
 
@@ -129,9 +131,7 @@ fn dies(v: &mut Vector3<f64>, chance: f64) -> bool {
     if rand::random::<f64>() > chance {
         true
     } else {
-        v.x /= chance;
-        v.y /= chance;
-        v.z /= chance;
+        *v /= chance;
         false
     }
 }

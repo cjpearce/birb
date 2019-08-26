@@ -55,11 +55,12 @@ impl Material {
     ) -> Option<BSDF> {
         let entering = direction.dot(&normal) < 0f64;
         if entering {
-            if rand::random::<f64>() <= self.schilck(&normal, &direction).average() {
+            let mut test = FilteredProbabilityTest::new();
+            if test.or(self.schilck(&normal, &direction).average()) {
                 Some(self.reflected(*direction, &normal))
-            } else if rand::random::<f64>() <= self.transparency {
+            } else if test.or(self.transparency) {
                 Some(self.refracted_entry(*direction, &normal))
-            } else if rand::random::<f64>() <= self.metal {
+            } else if test.or(self.metal) {
                 None
             } else {
                 Some(self.diffused(&normal))
@@ -109,6 +110,22 @@ impl Material {
             direction: exited,
             signal: tint,
         }
+    }
+}
+
+struct FilteredProbabilityTest {
+    r: f64,
+    p: f64
+}
+
+impl FilteredProbabilityTest {
+    fn new() -> Self {
+        Self{r: rand::random::<f64>(), p: 0.0}
+    }
+
+    fn or(&mut self, p: f64) -> bool {
+        self.p = (1.0 - self.p) * p;
+        self.r <= self.p
     }
 }
 

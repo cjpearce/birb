@@ -49,22 +49,16 @@ impl Scene {
             }
         }
 
-        if let Some(Hit {
-            object: obj,
-            distance: dist,
-        }) = closest
-        {
-            let point = ray.origin + (ray.direction * dist);
-            let normal = (point - obj.center()).normalize();
-            Some(Intersection {
+        closest.map(|hit| {
+            let point = ray.origin + (ray.direction * hit.distance);
+            let normal = (point - hit.object.center()).normalize();
+            Intersection {
                 hit: point,
                 normal,
-                material: obj.material(),
-                distance: dist,
-            })
-        } else {
-            None
-        }
+                material: hit.object.material(),
+                distance: hit.distance,
+            }
+        })
     }
 
     pub fn bg(&self, ray: &Ray) -> Vector3<f64> {

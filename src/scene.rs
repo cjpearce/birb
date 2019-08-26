@@ -27,29 +27,14 @@ impl Scene {
     }
 
     pub fn intersect(&self, ray: &Ray) -> Option<Intersection> {
-        let mut closest = None;
-        for obj in self.objects.iter() {
-            let dist = obj.intersection_distance(ray);
-            if closest.is_none() {
-                closest = Some(Hit {
-                    object: obj,
-                    distance: dist,
-                });
-            } else if let Some(Hit {
-                distance: close_dist,
-                ..
-            }) = closest
-            {
-                if dist < close_dist {
-                    closest = Some(Hit {
-                        object: obj,
-                        distance: dist,
-                    });
-                }
+        self.objects.iter().fold(None, |closest, object| {
+            let distance = object.intersection_distance(ray);
+            match closest {
+                None => Some(Hit{object, distance}),
+                Some(ref hit) if distance < hit.distance => Some(Hit{object, distance}),
+                c => c
             }
-        }
-
-        closest.map(|hit| {
+        }).map(|hit| {
             let point = ray.origin + (ray.direction * hit.distance);
             let normal = (point - hit.object.center()).normalize();
             Intersection {

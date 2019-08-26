@@ -2,11 +2,6 @@ use crate::ray::Ray;
 use crate::scene::Scene;
 use nalgebra::Point2;
 use nalgebra::Vector3;
-use web_sys::console;
-
-fn window() -> web_sys::Window {
-    web_sys::window().expect("no global `window` exists")
-}
 
 #[derive(Clone)]
 struct PixelInfo {
@@ -21,17 +16,11 @@ pub struct Tracer {
     width: usize,
     height: usize,
     exposures: Vec<PixelInfo>,
-    index: usize,
-    tick_ms: f64,
-    traces: usize,
-    performance: web_sys::Performance,
+    index: usize
 }
 
 impl Tracer {
     pub fn new(scene: Scene, bounces: u32, gamma: f64, width: usize, height: usize) -> Tracer {
-        let performance = window()
-            .performance()
-            .expect("performance should be available");
         Tracer {
             scene,
             bounces,
@@ -45,24 +34,13 @@ impl Tracer {
                 };
                 width * height
             ],
-            index: 0,
-            tick_ms: 50.0,
-            traces: 0,
-            performance: performance,
+            index: 0
         }
     }
 
     pub fn update(&mut self, pixels: &mut [u8]) {
-        let start = self.performance.now();
-        let end = start + self.tick_ms;
-
-        loop {
-            let limit = (self.index / (self.width * self.height)) + 1;
-            self.expose(limit, pixels);
-            if self.performance.now() > end {
-                break;
-            }
-        }
+        let limit = (self.index / (self.width * self.height)) + 1;
+        self.expose(limit, pixels);
     }
 
     fn pixel_for_index(&self, index: usize) -> Point2<usize> {
@@ -70,14 +48,11 @@ impl Tracer {
         Point2::new(wrapped % self.width, wrapped / self.width)
     }
 
-    fn average_at(&self, pixel: &Point2<usize>) -> Option<Vector3<f64>> {
-        if pixel.x >= self.width || pixel.y >= self.height {
-            return None;
-        }
-
+    fn average_at(&self, pixel: &Point2<usize>) -> Vector3<f64> {
         self.exposures
             .get(pixel.x + pixel.y * self.width)
-            .map(|e| e.color * (1.0 / e.exposures as f64))
+            .map(|e| e.color * (1.0 / f64::from(e.exposures)))
+            .expect("Invalid pixel position")
     }
 
     fn expose(&mut self, limit: usize, pixels: &mut [u8]) {
@@ -133,18 +108,16 @@ impl Tracer {
             }
         }
 
-        return energy;
+        energy
     }
 
     fn color_pixel(&mut self, pixel: Point2<usize>, pixels: &mut [u8]) {
         let index = (pixel.x + pixel.y * self.width) * 4;
         let average = self.average_at(&pixel);
-        if let Some(average) = average {
-            pixels[index] = self.apply_gamma(average.x);
-            pixels[index + 1] = self.apply_gamma(average.y);
-            pixels[index + 2] = self.apply_gamma(average.z);
-            pixels[index + 3] = 255;
-        }
+        pixels[index] = self.apply_gamma(average.x);
+        pixels[index + 1] = self.apply_gamma(average.y);
+        pixels[index + 2] = self.apply_gamma(average.z);
+        pixels[index + 3] = 255;
     }
 
     fn apply_gamma(&self, brightness: f64) -> u8 {

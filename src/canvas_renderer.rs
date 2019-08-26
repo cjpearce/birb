@@ -10,6 +10,7 @@ pub struct CanvasRenderer {
     width: usize,
     height: usize,
     canvas: HtmlCanvasElement,
+    tick_ms: f64
 }
 
 impl CanvasRenderer {
@@ -27,6 +28,7 @@ impl CanvasRenderer {
             width,
             height,
             canvas,
+            tick_ms: 50.0
         }
     }
 
@@ -50,8 +52,22 @@ impl CanvasRenderer {
         )
         .unwrap();
 
+        let performance = window()
+            .performance()
+            .expect("performance should be available");
+        
+        let tick_ms = self.tick_ms;
+
         *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
-            tracer.update(&mut data);
+            let start = performance.now();
+            let end = start + tick_ms;
+
+            loop {
+                tracer.update(&mut data);
+                if performance.now() > end {
+                    break;
+                }
+            }
             context
                 .put_image_data(&image_data, 0.0, 0.0)
                 .expect("should have a value");

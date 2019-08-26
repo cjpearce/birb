@@ -5,7 +5,14 @@ authors = ["christopher.james.pearce@gmail.com"]
 edition = "2018"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
+
+[dev-dependencies]
+criterion = "0.2"
+
+[[bench]]
+name = "tracer_bench"
+harness = false
 
 [dependencies]
 js-sys = "0.3.22"

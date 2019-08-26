@@ -3,13 +3,13 @@ use crate::tracer::Tracer;
 use wasm_bindgen::prelude::*;
 
 mod camera;
-mod canvas_renderer;
+pub mod canvas_renderer;
 mod material;
 mod ray;
 mod scene;
-mod scene_loader;
 mod sphere;
-mod tracer;
+pub mod scene_loader;
+pub mod tracer;
 
 #[wasm_bindgen(start)]
 pub fn start() {

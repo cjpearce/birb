@@ -1,4 +1,4 @@
-use nalgebra::{Vector3, Point3};
+use nalgebra::{Point3, Vector3};
 
 pub struct Ray {
     pub origin: Point3<f64>,

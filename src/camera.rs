@@ -1,7 +1,7 @@
-use nalgebra::{Vector3, Point3};
+use crate::ray::Ray;
+use nalgebra::{Point3, Vector3};
 use rand;
 use std::f64;
-use crate::ray::Ray;
 
 pub struct Camera {
     position: Point3<f64>,
@@ -23,9 +23,9 @@ impl Camera {
         focus: f64,
         fstop: f64,
         horizontal_angle: f64,
-        vertical_angle: f64
+        vertical_angle: f64,
     ) -> Self {
-        Self{
+        Self {
             position: position,
             sensor: sensor,
             focal_length: focal_length,
@@ -44,9 +44,9 @@ impl Camera {
         let aperture_point = self.aperture_point();
 
         let direction = (focus_point - aperture_point).normalize();
-        Ray{
+        Ray {
             origin: self.position,
-            direction: self.rotated(direction)
+            direction: self.rotated(direction),
         }
     }
 
@@ -60,9 +60,9 @@ impl Camera {
     fn focus_point(&self, sensor_point: Point3<f64>) -> Vector3<f64> {
         let origin = Point3::new(0.0, 0.0, 0.0);
         let sensor_to_lens = origin - sensor_point;
-        let lens_world_ray = Ray{
+        let lens_world_ray = Ray {
             origin,
-            direction: sensor_to_lens.normalize()
+            direction: sensor_to_lens.normalize(),
         };
         let focus_ratio = self.object_distance / lens_world_ray.direction.z;
         lens_world_ray.direction * focus_ratio
@@ -90,8 +90,8 @@ impl Camera {
 fn angle_axis(direction: &Vector3<f64>, angle: f64, axis: &Vector3<f64>) -> Vector3<f64> {
     let k = axis;
     let theta = angle * f64::consts::PI / 180.0;
-    let first = direction*theta.cos();
-    let second = (k.cross(direction))*(theta.sin());
-    let third = k*(k.dot(direction))*(1.0 - theta.cos());
+    let first = direction * theta.cos();
+    let second = (k.cross(direction)) * (theta.sin());
+    let third = k * (k.dot(direction)) * (1.0 - theta.cos());
     first + second + third
 }

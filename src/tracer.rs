@@ -1,7 +1,7 @@
-use crate::scene::Scene;
 use crate::ray::Ray;
-use nalgebra::Vector3;
+use crate::scene::Scene;
 use nalgebra::Point2;
+use nalgebra::Vector3;
 use web_sys::console;
 
 fn window() -> web_sys::Window {
@@ -11,7 +11,7 @@ fn window() -> web_sys::Window {
 #[derive(Clone)]
 struct PixelInfo {
     color: Vector3<f64>,
-    exposures: u32
+    exposures: u32,
 }
 
 pub struct Tracer {
@@ -24,29 +24,31 @@ pub struct Tracer {
     index: usize,
     tick_ms: f64,
     traces: usize,
-    performance: web_sys::Performance
+    performance: web_sys::Performance,
 }
 
 impl Tracer {
-    pub fn new(
-        scene: Scene,
-        bounces: u32,
-        gamma: f64,
-        width: usize,
-        height: usize
-    ) -> Tracer {
-        let performance = window().performance().expect("performance should be available");
-        Tracer{
+    pub fn new(scene: Scene, bounces: u32, gamma: f64, width: usize, height: usize) -> Tracer {
+        let performance = window()
+            .performance()
+            .expect("performance should be available");
+        Tracer {
             scene,
             bounces,
-            reciprocal_gamma: 1.0/gamma,
+            reciprocal_gamma: 1.0 / gamma,
             width,
             height,
-            exposures: vec![PixelInfo{color: Vector3::new(0.0, 0.0, 0.0), exposures: 0}; width*height],
+            exposures: vec![
+                PixelInfo {
+                    color: Vector3::new(0.0, 0.0, 0.0),
+                    exposures: 0
+                };
+                width * height
+            ],
             index: 0,
             tick_ms: 50.0,
             traces: 0,
-            performance: performance
+            performance: performance,
         }
     }
 
@@ -65,14 +67,14 @@ impl Tracer {
 
     fn pixel_for_index(&self, index: usize) -> Point2<usize> {
         let wrapped = index % (self.width * self.height);
-        Point2::new( wrapped % self.width, wrapped / self.width )
+        Point2::new(wrapped % self.width, wrapped / self.width)
     }
 
     fn average_at(&self, pixel: &Point2<usize>) -> Option<Vector3<f64>> {
         if pixel.x >= self.width || pixel.y >= self.height {
             return None;
         }
-        
+
         self.exposures
             .get(pixel.x + pixel.y * self.width)
             .map(|e| e.color * (1.0 / e.exposures as f64))
@@ -93,20 +95,17 @@ impl Tracer {
     }
 
     fn trace(&mut self, pixel: &Point2<usize>) -> Vector3<f64> {
-        let mut ray = self.scene.camera.ray(
-            pixel.x,
-            pixel.y,
-            self.width,
-            self.height
-        );
-        
+        let mut ray = self
+            .scene
+            .camera
+            .ray(pixel.x, pixel.y, self.width, self.height);
+
         let mut signal = Vector3::new(1.0, 1.0, 1.0);
         let mut energy = Vector3::new(0.0, 0.0, 0.0);
 
         for _ in 0..self.bounces {
             if let Some(intersect) = self.scene.intersect(&ray) {
-                if let Some(light) = intersect.material
-                    .emit(&intersect.normal, &ray.direction) {
+                if let Some(light) = intersect.material.emit(&intersect.normal, &ray.direction) {
                     energy += light.component_mul(&signal);
                 }
 
@@ -115,12 +114,15 @@ impl Tracer {
                     break;
                 }
 
-                if let Some(sample) = intersect.material.bsdf(
-                    &intersect.normal,
-                    &ray.direction,
-                    intersect.distance
-                ) {
-                    ray = Ray{origin: intersect.hit, direction: sample.direction};
+                if let Some(sample) =
+                    intersect
+                        .material
+                        .bsdf(&intersect.normal, &ray.direction, intersect.distance)
+                {
+                    ray = Ray {
+                        origin: intersect.hit,
+                        direction: sample.direction,
+                    };
                     signal = signal.component_mul(&sample.signal);
                 } else {
                     break;
@@ -130,8 +132,8 @@ impl Tracer {
                 break;
             }
         }
-        
-        return energy
+
+        return energy;
     }
 
     fn color_pixel(&mut self, pixel: Point2<usize>, pixels: &mut [u8]) {

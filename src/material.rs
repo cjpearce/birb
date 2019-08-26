@@ -1,6 +1,6 @@
-use nalgebra::{Vector3, Unit, geometry::Reflection};
-use std::f64;
+use nalgebra::{geometry::Reflection, Unit, Vector3};
 use rand;
+use std::f64;
 
 pub struct BSDF {
     pub direction: Vector3<f64>,
@@ -28,14 +28,14 @@ impl Material {
         metal: f64,
         gloss: f64,
     ) -> Self {
-        Self{
-            color: color,
-            refraction: refraction,
-            transparency: transparency,
-            light: light,
-            frensel: frensel,
-            metal: metal,
-            gloss: gloss
+        Self {
+            color,
+            refraction,
+            transparency,
+            light,
+            frensel,
+            metal,
+            gloss,
         }
     }
 
@@ -47,27 +47,32 @@ impl Material {
         }
     }
 
-    pub fn bsdf(&self, normal: &Vector3<f64>, direction: &Vector3<f64>, length: f64) -> Option<BSDF> {
+    pub fn bsdf(
+        &self,
+        normal: &Vector3<f64>,
+        direction: &Vector3<f64>,
+        length: f64,
+    ) -> Option<BSDF> {
         let entering = direction.dot(&normal) < 0f64;
         if entering {
-            let reflect = schilck(&normal, &direction, &self.frensel);
             let roughness = 1.0 - self.gloss;
+            let reflect = schilck(&normal, &direction, &self.frensel);
 
             if rand::random::<f64>() <= ave(reflect) {
-                let reflection = Reflection::new(Unit::new_normalize(normal.clone()), 0.0);
-                let mut reflected1 = direction.clone();
+                let reflection = Reflection::new(Unit::new_normalize(*normal), 0.0);
+                let mut reflected1 = *direction;
                 reflection.reflect(&mut reflected1);
                 let reflected = random_in_cone(&reflected1, roughness);
                 let tint = Vector3::new(1.0, 1.0, 1.0).lerp(&self.frensel, self.metal);
-                Some(BSDF{
+                Some(BSDF {
                     direction: reflected,
                     signal: tint,
                 })
             } else if rand::random::<f64>() <= self.transparency {
                 let transmitted = direction.refraction(&normal, 1.0, self.refraction).unwrap();
-                Some(BSDF{
+                Some(BSDF {
                     direction: transmitted,
-                    signal: Vector3::new(1.0, 1.0, 1.0)
+                    signal: Vector3::new(1.0, 1.0, 1.0),
                 })
             } else if rand::random::<f64>() <= self.metal {
                 None
@@ -75,37 +80,44 @@ impl Material {
                 let diffused = random_in_cos_hemisphere(normal);
                 let pdf = std::f64::consts::PI;
 
-                Some(BSDF{
+                Some(BSDF {
                     direction: diffused,
-                    signal: self.color * (1.0 / pdf)
+                    signal: self.color * (1.0 / pdf),
                 })
             }
-        } else if let Some(exited) = direction.refraction(
-            &-normal, self.refraction, 1.0
-        ) {
+        } else if let Some(exited) = direction.refraction(&-normal, self.refraction, 1.0) {
             let opacity = 1.0 - self.transparency;
             let volume = f64::min(opacity * length * length, 1.0);
             let tint = Vector3::new(1.0, 1.0, 1.0).lerp(&self.color, volume);
-            Some(BSDF{ direction: exited, signal: tint })
+            Some(BSDF {
+                direction: exited,
+                signal: tint,
+            })
         } else {
             None
         }
     }
+
+    fn reflection(&self, normal: &Vector3<f64>, direction: &Vector3<f64>) -> BSDF {
+        let roughness = 1.0 - self.gloss;
+        let reflection = Reflection::new(Unit::new_normalize(*normal), 0.0);
+        let mut reflected1 = *direction;
+        reflection.reflect(&mut reflected1);
+        let reflected = random_in_cone(&reflected1, roughness);
+        let tint = Vector3::new(1.0, 1.0, 1.0).lerp(&self.frensel, self.metal);
+        BSDF { direction: reflected, signal: tint }
+    }
 }
 
+
 fn ave(v: Vector3<f64>) -> f64 {
-    ( v.x + v.y + v.z ) / 3.0
+    (v.x + v.y + v.z) / 3.0
 }
 
 fn schilck(incident: &Vector3<f64>, normal: &Vector3<f64>, frensel: &Vector3<f64>) -> Vector3<f64> {
-        let cos_incident = (-incident).dot(&normal);
-        frensel + (
-            (
-                (Vector3::new(1.0, 1.0, 1.0) - frensel)
-                * (1.0 - cos_incident).powf(5.0)
-            )
-        )
-    }
+    let cos_incident = (-incident).dot(&normal);
+    frensel + ((Vector3::new(1.0, 1.0, 1.0) - frensel) * (1.0 - cos_incident).powf(5.0))
+}
 
 fn random_in_cone(direction: &Vector3<f64>, width: f64) -> Vector3<f64> {
     let u = rand::random::<f64>();
@@ -131,7 +143,7 @@ fn from_angles(theta: f64, phi: f64) -> Vector3<f64> {
 fn random_in_sphere() -> Vector3<f64> {
     from_angles(
         rand::random::<f64>() * f64::consts::PI * 2.0,
-        (rand::random::<f64>() * 2.0 - 1.0).asin()
+        (rand::random::<f64>() * 2.0 - 1.0).asin(),
     )
 }
 
@@ -151,11 +163,21 @@ fn random_in_cos_hemisphere(normal: &Vector3<f64>) -> Vector3<f64> {
 }
 
 trait LightDirection {
-    fn refraction(&self, normal: &Vector3<f64>, exterior_index: f64, interior_index: f64) -> Option<Vector3<f64>>;
+    fn refraction(
+        &self,
+        normal: &Vector3<f64>,
+        exterior_index: f64,
+        interior_index: f64,
+    ) -> Option<Vector3<f64>>;
 }
 
 impl LightDirection for Vector3<f64> {
-    fn refraction(&self, normal: &Vector3<f64>, exterior_index: f64, interior_index: f64) -> Option<Vector3<f64>> {
+    fn refraction(
+        &self,
+        normal: &Vector3<f64>,
+        exterior_index: f64,
+        interior_index: f64,
+    ) -> Option<Vector3<f64>> {
         let ratio = exterior_index / interior_index;
         let n_dot_i = normal.dot(self);
         let k = 1.0 - ratio * ratio * (1.0 - n_dot_i * n_dot_i);
@@ -163,7 +185,7 @@ impl LightDirection for Vector3<f64> {
             return None;
         } // total internal reflection
 
-        let offset = normal*(ratio * n_dot_i + k.sqrt());
+        let offset = normal * (ratio * n_dot_i + k.sqrt());
         Some(((self * ratio) - offset).normalize())
     }
 }
@@ -171,13 +193,28 @@ impl LightDirection for Vector3<f64> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use nalgebra::{Vector3};
+    use nalgebra::Vector3;
 
     #[test]
     fn schilck_is_correct() {
-        let incident = Vector3::new(0.9999877074290066, 0.002070457097031252, 0.004505352182583419);
-        let normal = Vector3::new(-0.42430229364657923, 0.17526903761586785, -0.8883964925974548);
+        let incident = Vector3::new(
+            0.9999877074290066,
+            0.002070457097031252,
+            0.004505352182583419,
+        );
+        let normal = Vector3::new(
+            -0.42430229364657923,
+            0.17526903761586785,
+            -0.8883964925974548,
+        );
         let frensel = Vector3::new(0.04, 0.04, 0.04);
-        assert_eq!(schilck(&incident, &normal, &frensel), Vector3::new(0.09881546766725074, 0.09881546766725074, 0.09881546766725074))
+        assert_eq!(
+            schilck(&incident, &normal, &frensel),
+            Vector3::new(
+                0.09881546766725074,
+                0.09881546766725074,
+                0.09881546766725074
+            )
+        )
     }
 }

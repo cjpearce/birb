@@ -1,17 +1,21 @@
-use std::f64;
-use nalgebra::Point3;
-use crate::ray::Ray;
 use crate::material::Material;
+use crate::ray::Ray;
+use nalgebra::Point3;
+use std::f64;
 
 pub struct Sphere {
     center: Point3<f64>,
     radius: f64,
-    material: Material
+    material: Material,
 }
 
 impl Sphere {
     pub fn new(center: Point3<f64>, radius: f64, material: Material) -> Self {
-        Sphere{ center, radius, material }
+        Sphere {
+            center,
+            radius,
+            material,
+        }
     }
 
     pub fn center(&self) -> Point3<f64> {

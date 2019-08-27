@@ -1,6 +1,7 @@
 {
   "scripts": {
-    "build": "webpack",
+    "start": "node server.js",
+    "heroku-postbuild": "webpack -p",
     "serve": "webpack-dev-server"
   },
   "devDependencies": {

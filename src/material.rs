@@ -1,4 +1,5 @@
 use nalgebra::{geometry::Reflection, Unit, Vector3};
+use crate::ray::DirectionExt;
 use rand;
 use std::f64;
 
@@ -39,11 +40,11 @@ impl Material {
         }
     }
 
-    pub fn emit(&self, normal: &Vector3<f64>, direction: &Vector3<f64>) -> Option<Vector3<f64>> {
+    pub fn emit(&self, normal: &Vector3<f64>, direction: &Vector3<f64>) -> Vector3<f64> {
         if self.light.max() == 0f64 {
-            None
+            Vector3::new(0.0, 0.0, 0.0)
         } else {
-            Some(self.light * f64::max(normal.dot(&-direction), 0f64))
+            self.light * f64::max(normal.dot(&-direction), 0f64)
         }
     }
 
@@ -52,23 +53,30 @@ impl Material {
         normal: &Vector3<f64>,
         direction: &Vector3<f64>,
         length: f64,
-    ) -> Option<BSDF> {
+    ) -> BSDF {
         let entering = direction.dot(&normal) < 0f64;
         if entering {
             let mut test = FilteredProbabilityTest::new();
-            if test.or(self.schilck(&normal, &direction).average()) {
-                Some(self.reflected(*direction, &normal))
+            if test.or(self.schilck(&normal, &direction).component_average()) {
+                self.reflected(*direction, &normal)
             } else if test.or(self.transparency) {
-                Some(self.refracted_entry(*direction, &normal))
+                self.refracted_entry(*direction, &normal)
             } else if test.or(self.metal) {
-                None
+                self.dead()
             } else {
-                Some(self.diffused(&normal))
+                self.diffused(&normal)
             }
         } else if let Some(exited) = direction.refraction(&-normal, self.refraction, 1.0) {
-            Some(self.refracted_exit(exited, length))
+            self.refracted_exit(exited, length)
         } else {
-            None
+            self.dead()
+        }
+    }
+
+    fn dead(&self) -> BSDF {
+        BSDF {
+            direction: Vector3::new(0.0, 0.0, 0.0),
+            signal: Vector3::new(0.0, 0.0, 0.0)
         }
     }
 
@@ -80,7 +88,7 @@ impl Material {
     fn diffused(&self, normal: &Vector3<f64>) -> BSDF {
         let pdf = std::f64::consts::PI;
         BSDF {
-            direction: random_in_cos_hemisphere(normal),
+            direction: Vector3::random_in_cos_hemisphere(normal),
             signal: self.color * (1.0 / pdf),
         }
     }
@@ -90,7 +98,7 @@ impl Material {
             .reflect(&mut direction);
 
         BSDF{
-            direction: random_in_cone(&direction, 1.0 - self.gloss),
+            direction: Vector3::random_in_cone(&direction, 1.0 - self.gloss),
             signal: Vector3::new(1.0, 1.0, 1.0).lerp(&self.frensel, self.metal)
         }
     }
@@ -126,87 +134,6 @@ impl FilteredProbabilityTest {
     fn or(&mut self, p: f64) -> bool {
         self.p = (1.0 - self.p) * p;
         self.r <= self.p
-    }
-}
-
-trait Averageable {
-    fn average(&self) -> f64;
-}
-
-impl Averageable for Vector3<f64> {
-    fn average(&self) -> f64 {
-        (self.x + self.y + self.z) / 3.0
-    }
-}
-
-fn random_in_cone(direction: &Vector3<f64>, width: f64) -> Vector3<f64> {
-    let u = rand::random::<f64>();
-    let v = rand::random::<f64>();
-    let theta = width * 0.5 * f64::consts::PI * (1.0 - (2.0 * u.acos() / f64::consts::PI));
-    let m1 = theta.sin();
-    let m2 = theta.cos();
-    let a = v * 2.0 * f64::consts::PI;
-    let q = random_in_sphere();
-    let s = direction.cross(&q);
-    let t = direction.cross(&s);
-    let mut d = Vector3::new(0.0, 0.0, 0.0);
-    d += s * (m1 * a.cos());
-    d += t * (m1 * a.sin());
-    d += direction * m2;
-    d.normalize()
-}
-
-fn from_angles(theta: f64, phi: f64) -> Vector3<f64> {
-    Vector3::new(theta.cos() * phi.cos(), phi.sin(), theta.sin() * phi.cos())
-}
-
-fn random_in_sphere() -> Vector3<f64> {
-    from_angles(
-        rand::random::<f64>() * f64::consts::PI * 2.0,
-        (rand::random::<f64>() * 2.0 - 1.0).asin(),
-    )
-}
-
-fn random_in_cos_hemisphere(normal: &Vector3<f64>) -> Vector3<f64> {
-    let u = rand::random::<f64>();
-    let v = rand::random::<f64>();
-    let r = u.sqrt();
-    let theta = 2.0 * f64::consts::PI * v;
-    let sphere_dir = random_in_sphere();
-    let s = normal.cross(&sphere_dir).normalize();
-    let t = normal.cross(&s);
-    let mut d = Vector3::new(0.0, 0.0, 0.0);
-    d += s * (r * theta.cos());
-    d += t * (r * theta.sin());
-    d += normal * (1.0 - u).sqrt();
-    d
-}
-
-trait Ray {
-    fn refraction(
-        &self,
-        normal: &Vector3<f64>,
-        exterior_index: f64,
-        interior_index: f64,
-    ) -> Option<Vector3<f64>>;
-}
-
-impl Ray for Vector3<f64> {
-    fn refraction(
-        &self,
-        normal: &Vector3<f64>,
-        exterior_index: f64,
-        interior_index: f64,
-    ) -> Option<Vector3<f64>> {
-        let ratio = exterior_index / interior_index;
-        let n_dot_i = normal.dot(self);
-        let k = 1.0 - ratio * ratio * (1.0 - n_dot_i * n_dot_i);
-        if k < 0.0 {
-            return None;
-        } // total internal reflection
-
-        let offset = normal * (ratio * n_dot_i + k.sqrt());
-        Some(((self * ratio) - offset).normalize())
     }
 }
 

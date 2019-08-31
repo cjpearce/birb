@@ -42,7 +42,6 @@ impl Camera {
         let sensor_point = self.sensor_point(x, y, width, height);
         let focus_point = self.focus_point(sensor_point);
         let aperture_point = self.aperture_point();
-
         let direction = (focus_point - aperture_point).normalize();
         Ray {
             origin: self.position,

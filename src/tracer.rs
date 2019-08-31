@@ -1,4 +1,4 @@
-use crate::ray::Ray;
+use crate::ray::{Ray, DirectionExt};
 use crate::scene::Scene;
 use nalgebra::Point2;
 use nalgebra::Vector3;
@@ -9,13 +9,43 @@ struct PixelInfo {
     exposures: u32,
 }
 
+impl PixelInfo {
+    fn color(&self, reciprocal_gamma: f64) -> Vector3<u8> {
+        let color = self.color * (1.0 / f64::from(self.exposures));
+        let color = (color / 255.0)
+            .apply_into(|v| v.powf(reciprocal_gamma).min(1.0))
+            * 255.0;
+        Vector3::new(color.x as u8, color.y as u8, color.z as u8)
+    }
+}
+
+struct Exposures(Vec<PixelInfo>, f64);
+
+impl Exposures {
+    fn new(length: usize, reciprocal_gamma: f64) -> Self {
+        let default = PixelInfo {
+            color: Vector3::new(0.0, 0.0, 0.0),
+            exposures: 0
+        };
+        Self(vec![default; length], reciprocal_gamma)
+    }
+
+    fn add_sample(&mut self, position: usize, sample: Vector3<f64>) {
+        self.0[position].color += sample;
+        self.0[position].exposures += 1;
+    }
+
+    fn color_at(&self, position: usize) -> Vector3<u8> {
+        self.0[position].color(self.1)
+    }
+}
+
 pub struct Tracer {
     scene: Scene,
     bounces: u32,
-    reciprocal_gamma: f64,
     width: usize,
     height: usize,
-    exposures: Vec<PixelInfo>,
+    exposures: Exposures,
     index: usize
 }
 
@@ -24,23 +54,27 @@ impl Tracer {
         Tracer {
             scene,
             bounces,
-            reciprocal_gamma: 1.0 / gamma,
             width,
             height,
-            exposures: vec![
-                PixelInfo {
-                    color: Vector3::new(0.0, 0.0, 0.0),
-                    exposures: 0
-                };
-                width * height
-            ],
+            exposures: Exposures::new(width*height, 1.0/gamma),
             index: 0
         }
     }
 
     pub fn update(&mut self, pixels: &mut [u8]) {
         let limit = (self.index / (self.width * self.height)) + 1;
-        self.expose(limit, pixels);
+        let pixel = self.pixel_for_index(self.index);
+        self.expose(pixel, limit);
+
+        let color = self.exposures.color_at(pixel.x + pixel.y * self.width);
+
+        let index = (pixel.x + pixel.y * self.width) * 4;
+        pixels[index] = color.x;
+        pixels[index + 1] = color.y;
+        pixels[index + 2] = color.z;
+        pixels[index + 3] = 255;
+
+        self.index += 1;
     }
 
     fn pixel_for_index(&self, index: usize) -> Point2<usize> {
@@ -48,28 +82,15 @@ impl Tracer {
         Point2::new(wrapped % self.width, wrapped / self.width)
     }
 
-    fn average_at(&self, pixel: &Point2<usize>) -> Vector3<f64> {
-        self.exposures
-            .get(pixel.x + pixel.y * self.width)
-            .map(|e| e.color * (1.0 / f64::from(e.exposures)))
-            .expect("Invalid pixel position")
-    }
-
-    fn expose(&mut self, limit: usize, pixels: &mut [u8]) {
-        let pixel = self.pixel_for_index(self.index);
+    fn expose(&mut self, pixel: Point2<usize>, limit: usize) {
         let rgba_index = pixel.x + pixel.y * self.width;
-
         for _ in 0..limit {
-            let sample = self.trace(&pixel);
-            self.exposures[rgba_index as usize].color += sample;
-            self.exposures[rgba_index as usize].exposures += 1;
+            let sample = self.trace(pixel);
+            self.exposures.add_sample(rgba_index as usize, sample);
         }
-
-        self.color_pixel(pixel, pixels);
-        self.index += 1;
     }
 
-    fn trace(&mut self, pixel: &Point2<usize>) -> Vector3<f64> {
+    fn trace(&mut self, pixel: Point2<usize>) -> Vector3<f64> {
         let mut ray = self
             .scene
             .camera
@@ -80,26 +101,18 @@ impl Tracer {
 
         for _ in 0..self.bounces {
             if let Some(intersect) = self.scene.intersect(&ray) {
-                if let Some(light) = intersect.material.emit(&intersect.normal, &ray.direction) {
-                    energy += light.component_mul(&signal);
-                }
+                energy += intersect
+                    .material
+                    .emit(&intersect.normal, &ray.direction)
+                    .component_mul(&signal);
 
-                if let Some(sample) =
-                    intersect
-                        .material
-                        .bsdf(&intersect.normal, &ray.direction, intersect.distance)
-                {
-                    ray = Ray {
-                        origin: intersect.hit,
-                        direction: sample.direction,
-                    };
-                    signal = signal.component_mul(&sample.signal);
-                } else {
-                    break;
-                }
+                let sample = intersect
+                    .material
+                    .bsdf(&intersect.normal, &ray.direction, intersect.distance);
 
-                let max = signal.norm();
-                if dies(&mut signal, max) {
+                ray = Ray{origin: intersect.hit, direction: sample.direction};
+                signal = signal.component_mul(&sample.signal);
+                if signal.norm() < 0.001 {
                     break;
                 }
             } else {
@@ -109,29 +122,5 @@ impl Tracer {
         }
 
         energy
-    }
-
-    fn color_pixel(&mut self, pixel: Point2<usize>, pixels: &mut [u8]) {
-        let index = (pixel.x + pixel.y * self.width) * 4;
-        let average = self.apply_gamma(self.average_at(&pixel));
-        pixels[index] = average.x as u8;
-        pixels[index + 1] = average.y as u8;
-        pixels[index + 2] = average.z as u8;
-        pixels[index + 3] = 255;
-    }
-
-    fn apply_gamma(&self, pixel: Vector3<f64>) -> Vector3<f64> {
-        (pixel / 255.0)
-            .apply_into(|v| v.powf(self.reciprocal_gamma).min(1.0))
-            * 255.0
-    }
-}
-
-fn dies(v: &mut Vector3<f64>, chance: f64) -> bool {
-    if rand::random::<f64>() > chance {
-        true
-    } else {
-        *v /= chance;
-        false
     }
 }

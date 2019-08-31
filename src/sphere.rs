@@ -3,19 +3,34 @@ use crate::ray::Ray;
 use nalgebra::Point3;
 use std::f64;
 
+
+#[derive(Copy, Clone)]
 pub struct Sphere {
+    index: usize,
     center: Point3<f64>,
     radius: f64,
     material: Material,
 }
 
+impl PartialEq for Sphere {
+    fn eq(&self, other: &Self) -> bool {
+        self.index == other.index
+    }
+}
+
 impl Sphere {
-    pub fn new(center: Point3<f64>, radius: f64, material: Material) -> Self {
+    pub fn new(index: usize, center: Point3<f64>, radius: f64, material: Material) -> Self {
         Sphere {
+            index,
             center,
             radius,
             material,
         }
+    }
+
+    // this only really needs to be exposed for bounding sphers
+    pub fn radius(&self) -> f64 {
+        self.radius
     }
 
     pub fn center(&self) -> Point3<f64> {

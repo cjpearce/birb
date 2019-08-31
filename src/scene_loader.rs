@@ -95,12 +95,12 @@ fn load_spheres_scene() -> Scene {
     );
 
     let objects = vec![
-        Sphere::new(Point3::new(-3.3, 1.0, -4.3), 1.0, gold),
-        Sphere::new(Point3::new(-1.1, 1.0, -5.0), 1.0, blue_plastic),
-        Sphere::new(Point3::new(1.0, 1.0, -5.0), 1.0, silver),
-        Sphere::new(Point3::new(3.2, 1.0, -4.6), 1.0, green_glass),
-        Sphere::new(Point3::new(0.5, -1000.0, -8.0), 1000.0, white_lambert),
-        Sphere::new(Point3::new(-8.0, 3.0, -1.0), 2.0, bright_light)
+        Sphere::new(0, Point3::new(-3.3, 1.0, -4.3), 1.0, gold),
+        Sphere::new(1, Point3::new(-1.1, 1.0, -5.0), 1.0, blue_plastic),
+        Sphere::new(2, Point3::new(1.0, 1.0, -5.0), 1.0, silver),
+        Sphere::new(3, Point3::new(3.2, 1.0, -4.6), 1.0, green_glass),
+        Sphere::new(4, Point3::new(0.5, -1000.0, -8.0), 1000.0, white_lambert),
+        Sphere::new(5, Point3::new(-8.0, 3.0, -1.0), 2.0, bright_light)
     ];
 
     let camera = Camera::new(
@@ -113,7 +113,7 @@ fn load_spheres_scene() -> Scene {
         25.0
     );
 
-    Scene::new(objects, camera)
+    Scene::new(objects, camera, 5)
 }
 
 fn load_box_scene() -> Scene {
@@ -121,7 +121,7 @@ fn load_box_scene() -> Scene {
         Vector3::new(0.0, 0.0, 0.0),
         1.0,
         1.0,
-        Vector3::new(3000.0, 3000.0, 3000.0),
+        Vector3::new(6000.0, 6000.0, 6000.0),
         Vector3::new(0.0, 0.0, 0.0),
         0.0,
         0.0
@@ -144,7 +144,7 @@ fn load_box_scene() -> Scene {
         Vector3::new(0.0, 0.0, 0.0),
         Vector3::new(0.04, 0.04, 0.04),
         0.0,
-        0.2
+        0.0
     );
 
     let red_plastic = Material::new(
@@ -154,7 +154,7 @@ fn load_box_scene() -> Scene {
         Vector3::new(0.0, 0.0, 0.0),
         Vector3::new(0.04, 0.04, 0.04),
         0.0,
-        0.2
+        0.0
     );
 
     let silver = Material::new(
@@ -178,14 +178,14 @@ fn load_box_scene() -> Scene {
     );
 
     let objects = vec![
-        Sphere::new(Point3::new(-1005.0, 0.0, -8.0), 1000.0, blue_plastic),
-        Sphere::new(Point3::new(1005.0, 0.0, -8.0), 1000.0, red_plastic),
-        Sphere::new(Point3::new(0.0, -1003.0, -8.0), 1000.0, white_lambert),
-        Sphere::new(Point3::new(0.0, 1003.0, -8.0), 1000.0, white_lambert),
-        Sphere::new(Point3::new(0.0, 0.0, -1010.0), 1000.0, white_lambert),
-        Sphere::new(Point3::new(0.0, 13.0, -8.0), 10.5, bright_light),
-        Sphere::new(Point3::new(1.0, -2.0, -7.0), 1.0, silver),
-        Sphere::new(Point3::new(-0.75, -2.0, -5.0), 1.0, glass)
+        Sphere::new(0, Point3::new(-1005.0, 0.0, -8.0), 1000.0, blue_plastic),
+        Sphere::new(1, Point3::new(1005.0, 0.0, -8.0), 1000.0, red_plastic),
+        Sphere::new(2, Point3::new(0.0, -1003.0, -8.0), 1000.0, white_lambert),
+        Sphere::new(3, Point3::new(0.0, 1003.0, -8.0), 1000.0, white_lambert),
+        Sphere::new(4, Point3::new(0.0, 0.0, -1010.0), 1000.0, white_lambert),
+        Sphere::new(5, Point3::new(0.0, 2.5, -8.0), 0.5, bright_light),
+        Sphere::new(6, Point3::new(1.0, -2.0, -7.0), 1.0, silver),
+        Sphere::new(7, Point3::new(-0.75, -2.0, -5.0), 1.0, glass)
     ];
 
     let camera = Camera::new(
@@ -198,5 +198,5 @@ fn load_box_scene() -> Scene {
         0.0
     );
 
-    Scene::new(objects, camera)
+    Scene::new(objects, camera, 5)
 }

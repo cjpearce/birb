@@ -6,6 +6,7 @@ use std::f64;
 pub struct BSDF {
     pub direction: Vector3<f64>,
     pub signal: Vector3<f64>,
+    pub reflected: bool
 }
 
 #[derive(Copy, Clone)]
@@ -40,11 +41,12 @@ impl Material {
         }
     }
 
-    pub fn emit(&self, normal: &Vector3<f64>, direction: &Vector3<f64>) -> Vector3<f64> {
+    pub fn emit(&self) -> Vector3<f64> {
         if self.light.max() == 0f64 {
             Vector3::new(0.0, 0.0, 0.0)
         } else {
-            self.light * f64::max(normal.dot(&-direction), 0f64)
+            // self.light * f64::max(normal.dot(&-direction), 0f64)
+            self.light
         }
     }
 
@@ -53,18 +55,20 @@ impl Material {
         normal: &Vector3<f64>,
         direction: &Vector3<f64>,
         length: f64,
+        u: f64,
+        v: f64
     ) -> BSDF {
         let entering = direction.dot(&normal) < 0f64;
         if entering {
             let mut test = FilteredProbabilityTest::new();
             if test.or(self.schilck(&normal, &direction).component_average()) {
-                self.reflected(*direction, &normal)
+                self.reflected(*direction, &normal, u, v)
             } else if test.or(self.transparency) {
                 self.refracted_entry(*direction, &normal)
             } else if test.or(self.metal) {
                 self.dead()
             } else {
-                self.diffused(&normal)
+                self.diffused(&normal, u, v)
             }
         } else if let Some(exited) = direction.refraction(&-normal, self.refraction, 1.0) {
             self.refracted_exit(exited, length)
@@ -76,7 +80,8 @@ impl Material {
     fn dead(&self) -> BSDF {
         BSDF {
             direction: Vector3::new(0.0, 0.0, 0.0),
-            signal: Vector3::new(0.0, 0.0, 0.0)
+            signal: Vector3::new(0.0, 0.0, 0.0),
+            reflected: false
         }
     }
 
@@ -85,28 +90,31 @@ impl Material {
         self.frensel + ((Vector3::new(1.0, 1.0, 1.0) - self.frensel) * (1.0 - cos_incident).powf(5.0))
     }
 
-    fn diffused(&self, normal: &Vector3<f64>) -> BSDF {
+    fn diffused(&self, normal: &Vector3<f64>, u: f64, v: f64) -> BSDF {
         let pdf = std::f64::consts::PI;
         BSDF {
-            direction: Vector3::random_in_cos_hemisphere(normal),
+            direction: Vector3::random_in_cos_hemisphere(normal, u, v),
             signal: self.color * (1.0 / pdf),
+            reflected: false
         }
     }
 
-    fn reflected(&self, mut direction: Vector3<f64>, normal: &Vector3<f64>) -> BSDF {
+    fn reflected(&self, mut direction: Vector3<f64>, normal: &Vector3<f64>, u: f64, v: f64) -> BSDF {
         Reflection::new(Unit::new_normalize(*normal), 0.0)
             .reflect(&mut direction);
 
         BSDF{
-            direction: Vector3::random_in_cone(&direction, 1.0 - self.gloss),
-            signal: Vector3::new(1.0, 1.0, 1.0).lerp(&self.frensel, self.metal)
+            direction: Vector3::random_in_cone(&direction, 1.0 - self.gloss, u, v),
+            signal: Vector3::new(1.0, 1.0, 1.0).lerp(&self.frensel, self.metal),
+            reflected: true
         }
     }
 
     fn refracted_entry(&self, direction: Vector3<f64>, normal: &Vector3<f64>) -> BSDF {
         BSDF{
             direction: direction.refraction(normal, 1.0, self.refraction).unwrap(),
-            signal: Vector3::new(1.0, 1.0, 1.0)
+            signal: Vector3::new(1.0, 1.0, 1.0),
+            reflected: true
         }
     }
 
@@ -117,6 +125,7 @@ impl Material {
         BSDF {
             direction: exited,
             signal: tint,
+            reflected: true
         }
     }
 }

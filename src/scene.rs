@@ -4,10 +4,12 @@ use crate::ray::Ray;
 use crate::sphere::Sphere;
 use nalgebra::{Point3, Vector3};
 
-pub struct Intersection<'a> {
+#[derive(Copy, Clone)]
+pub struct Intersection {
     pub hit: Point3<f64>,
     pub normal: Vector3<f64>,
-    pub material: &'a Material,
+    pub material: Material,
+    pub object: Sphere,
     pub distance: f64,
 }
 
@@ -19,11 +21,12 @@ struct Hit<'a> {
 pub struct Scene {
     pub camera: Camera,
     objects: Vec<Sphere>,
+    light: usize
 }
 
 impl Scene {
-    pub fn new(objects: Vec<Sphere>, camera: Camera) -> Scene {
-        Scene { objects, camera }
+    pub fn new(objects: Vec<Sphere>, camera: Camera, light: usize) -> Scene {
+        Scene { objects, camera, light }
     }
 
     pub fn intersect(&self, ray: &Ray) -> Option<Intersection> {
@@ -40,14 +43,19 @@ impl Scene {
             Intersection {
                 hit: point,
                 normal,
-                material: hit.object.material(),
+                material: *hit.object.material(),
                 distance: hit.distance,
+                object: *hit.object
             }
         })
     }
 
     pub fn bg(&self, ray: &Ray) -> Vector3<f64> {
         Vector3::new(1.0, 0.0, 0.0)
+    }
+
+    pub fn light(&self) -> Sphere {
+        self.objects[self.light]
     }
 }
 

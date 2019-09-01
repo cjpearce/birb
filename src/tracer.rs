@@ -120,6 +120,11 @@ impl Tracer {
             direction: (point - intersection.hit).normalize()
         };
 
+        let cos_angle = ray.direction.dot(&intersection.normal);
+        if cos_angle <= 0.0 {
+            return Vector3::new(0.0, 0.0, 0.0);
+        }
+
         // check for light visibility
         let hit = self.scene.intersect(&ray);
         if hit.is_none() || hit.unwrap().object != light {
@@ -152,12 +157,13 @@ impl Tracer {
         if let Some(intersect) = self.scene.intersect(&ray) {
             let mut energy = Vector3::new(0.0, 0.0, 0.0);
             let n = f64::from(samples).sqrt() as u32;
+            let direct = self.sample_lights(&intersect, ray.direction);
 
-            if intersect.material.emit().norm() > 0.1 && !emmission {
-                return Vector3::new(0.0, 0.0, 0.0);
+            if emmission {
+                // return Vector3::new(0.0, 0.0, 0.0);
+                energy += intersect.material.emit() * f64::from(n*n);
             }
 
-            energy += intersect.material.emit() * f64::from(n*n);
 
             for u in 0..n {
                 for v in 0..n {
@@ -171,11 +177,11 @@ impl Tracer {
                     let ray = Ray{origin: intersect.hit, direction: sample.direction};
                     let indirect = self.trace(ray, 1, depth + 1, sample.reflected);
 
-                    let direct = self.sample_lights(&intersect, ray.direction);
+                    energy += indirect.component_mul(&sample.signal);
+
                     if !sample.reflected {
                         energy += direct.component_mul(&sample.signal); 
                     }
-                    energy += indirect.component_mul(&sample.signal);
                 }
             }
 

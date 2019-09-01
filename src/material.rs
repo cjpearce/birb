@@ -42,12 +42,7 @@ impl Material {
     }
 
     pub fn emit(&self) -> Vector3<f64> {
-        if self.light.max() == 0f64 {
-            Vector3::new(0.0, 0.0, 0.0)
-        } else {
-            // self.light * f64::max(normal.dot(&-direction), 0f64)
-            self.light
-        }
+        self.light
     }
 
     pub fn bsdf(

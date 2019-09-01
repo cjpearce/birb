@@ -19,7 +19,7 @@ pub fn start() {
     let tracer = Tracer::new(
         scene,
         6,
-        2.2,
+        1.0,
         canvas_renderer.width(),
         canvas_renderer.height(),
     );

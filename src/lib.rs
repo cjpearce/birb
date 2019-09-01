@@ -8,17 +8,18 @@ mod material;
 mod ray;
 mod scene;
 mod sphere;
+mod onb;
 pub mod scene_loader;
 pub mod tracer;
 
 #[wasm_bindgen(start)]
 pub fn start() {
-    let scene = scene_loader::load_scene("box").unwrap();
+    let scene = scene_loader::load_scene("spheres").unwrap();
     let canvas_renderer = CanvasRenderer::new("canvas");
 
     let tracer = Tracer::new(
         scene,
-        6,
+        10,
         1.0,
         canvas_renderer.width(),
         canvas_renderer.height(),

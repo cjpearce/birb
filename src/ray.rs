@@ -1,5 +1,6 @@
 use nalgebra::{Point3, Vector3};
 use std::f64;
+use crate::onb::OrthonormalBasis;
 
 #[derive(Copy, Clone)]
 pub struct Ray {
@@ -10,7 +11,7 @@ pub struct Ray {
 pub trait DirectionExt {
     fn from_spherical(theta: f64, phi: f64) -> Self;
     fn random_in_sphere() -> Self;
-    fn random_in_cos_hemisphere(normal: &Self, u: f64, v: f64) -> Self;
+    fn random_in_cos_hemisphere(u: f64, v: f64) -> Self;
     fn random_in_cone(direction: &Self, width: f64, u: f64, v: f64) -> Self;
     fn component_average(&self) -> f64;
     fn greyscale(&self) -> Self;
@@ -34,19 +35,13 @@ impl DirectionExt for Vector3<f64> {
         )
     }
 
-    fn random_in_cos_hemisphere(normal: &Self, u: f64, v: f64) -> Self {
-        // let u = rand::random::<f64>();
-        // let v = rand::random::<f64>();
-        let r = u.sqrt();
-        let theta = 2.0 * f64::consts::PI * v;
-        let sphere_dir = Self::random_in_sphere();
-        let s = normal.cross(&sphere_dir).normalize();
-        let t = normal.cross(&s);
-        let mut d = Vector3::new(0.0, 0.0, 0.0);
-        d += s * (r * theta.cos());
-        d += t * (r * theta.sin());
-        d += normal * (1.0 - u).sqrt();
-        d
+    fn random_in_cos_hemisphere(u: f64, v: f64) -> Self {
+        let phi = 2.0 * std::f64::consts::PI * u;
+        Vector3::new(
+            phi.cos() * 2.0 * v.sqrt(),
+            phi.sin() * 2.0 * v.sqrt(),
+            (1.0 - v).sqrt()
+        )
     }
 
     fn random_in_cone(direction: &Self, width: f64, u: f64, v: f64) -> Self {

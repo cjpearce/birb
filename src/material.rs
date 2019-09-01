@@ -1,12 +1,13 @@
 use nalgebra::{geometry::Reflection, Unit, Vector3};
-use crate::ray::DirectionExt;
+use crate::ray::{DirectionExt, Ray};
+use crate::scene::{Scene, Intersection};
+use crate::onb::{OrthonormalBasis};
 use rand;
 use std::f64;
 
 pub struct BSDF {
     pub direction: Vector3<f64>,
-    pub signal: Vector3<f64>,
-    pub reflected: bool
+    pub signal: Vector3<f64>
 }
 
 #[derive(Copy, Clone)]
@@ -51,7 +52,9 @@ impl Material {
         direction: &Vector3<f64>,
         length: f64,
         u: f64,
-        v: f64
+        v: f64,
+        scene: &Scene,
+        intersect: &Intersection
     ) -> BSDF {
         let entering = direction.dot(&normal) < 0f64;
         if entering {
@@ -63,7 +66,7 @@ impl Material {
             } else if test.or(self.metal) {
                 self.dead()
             } else {
-                self.diffused(&normal, u, v)
+                self.diffused(&normal, u, v, scene, intersect)
             }
         } else if let Some(exited) = direction.refraction(&-normal, self.refraction, 1.0) {
             self.refracted_exit(exited, length)
@@ -75,8 +78,7 @@ impl Material {
     fn dead(&self) -> BSDF {
         BSDF {
             direction: Vector3::new(0.0, 0.0, 0.0),
-            signal: Vector3::new(0.0, 0.0, 0.0),
-            reflected: false
+            signal: Vector3::new(0.0, 0.0, 0.0)
         }
     }
 
@@ -85,12 +87,93 @@ impl Material {
         self.frensel + ((Vector3::new(1.0, 1.0, 1.0) - self.frensel) * (1.0 - cos_incident).powf(5.0))
     }
 
-    fn diffused(&self, normal: &Vector3<f64>, u: f64, v: f64) -> BSDF {
-        let pdf = std::f64::consts::PI;
+    fn diffused(&self, normal: &Vector3<f64>, u: f64, v: f64, scene: &Scene,
+        intersect: &Intersection) -> BSDF {
+        let pa = 1.0;
+        let a = self.cos_biased_diffused(normal, u, v);
+        let b = self.light_biased_diffused(scene, intersect);
+
+        // TODO: Bug here with cos biassed diffuse light not being bright enough
+        // TODO: Mixing needs to be done by feeding the generated vector into the pdf
+        // for both individually, so they can't be precomputed as they're being done
+        // here
+        if rand::random::<f64>() <= pa {
+            BSDF {
+                direction: a.direction,
+                signal: pa * a.signal + (1.0-pa) * b.signal
+            }
+        } else {
+            BSDF {
+                direction: b.direction,
+                signal: pa * a.signal + (1.0-pa) * b.signal
+            }
+        }
+    }
+
+    fn cos_biased_diffused(&self, normal: &Vector3<f64>, u: f64, v: f64) -> BSDF {
+        let vec = Vector3::random_in_cos_hemisphere(u, v);
+        let onb = OrthonormalBasis::from_normal(*normal);
+        let direction = onb.local(vec);
+        let cosine = direction.dot(&normal);
+        let p = if cosine > 0.0 { cosine / std::f64::consts::PI } else { 0.0 };
+
         BSDF {
-            direction: Vector3::random_in_cos_hemisphere(normal, u, v),
-            signal: self.color * (1.0 / pdf),
-            reflected: false
+            direction,
+            signal: self.color * p
+        }
+    }
+
+    fn light_biased_diffused(&self, scene: &Scene, intersection: &Intersection) -> BSDF {
+        let light = scene.light();
+
+        // get bounding sphere center and radius
+        let center = light.center();
+        let radius = light.radius();
+
+        // get random point in disk
+        let point = loop {
+            let x = rand::random::<f64>() * 2.0 - 1.0;
+            let y = rand::random::<f64>() * 2.0 - 1.0;
+            if x*x + y*y <= 1.0 {
+                let l = (center - intersection.hit).normalize();
+                let u = l.cross(&Vector3::random_in_sphere()).normalize();
+                let v = l.cross(&u);
+
+                break center + (u * x * radius) + (v * y * radius);
+            }
+        };
+
+        // construct ray toward light point
+        let ray = Ray{
+            origin: intersection.hit,
+            direction: (point - intersection.hit).normalize()
+        };
+
+        let cos_angle = ray.direction.dot(&intersection.normal);
+        if cos_angle <= 0.0 {
+            return BSDF {
+                direction: ray.direction,
+                signal: Vector3::new(0.0, 0.0, 0.0)
+            }
+        }
+
+        // compute solid angle (hemisphere coverage)
+        let hyp = (center - intersection.hit).norm();
+        let opp = radius;
+        let theta = (opp / hyp).asin();
+        let adj = opp / theta.tan();
+        let d = theta.cos() * adj;
+        let r = theta.sin() * adj;
+
+        let p = if hyp < opp {
+            1.0
+        } else {
+            f64::min((r * r) / (d * d), 1.0)
+        };
+
+        BSDF {
+            direction: ray.direction,
+            signal: self.color * p
         }
     }
 
@@ -100,16 +183,14 @@ impl Material {
 
         BSDF{
             direction: Vector3::random_in_cone(&direction, 1.0 - self.gloss, u, v),
-            signal: Vector3::new(1.0, 1.0, 1.0).lerp(&self.frensel, self.metal),
-            reflected: true
+            signal: Vector3::new(1.0, 1.0, 1.0).lerp(&self.frensel, self.metal)
         }
     }
 
     fn refracted_entry(&self, direction: Vector3<f64>, normal: &Vector3<f64>) -> BSDF {
         BSDF{
             direction: direction.refraction(normal, 1.0, self.refraction).unwrap(),
-            signal: Vector3::new(1.0, 1.0, 1.0),
-            reflected: true
+            signal: Vector3::new(1.0, 1.0, 1.0)
         }
     }
 
@@ -119,8 +200,7 @@ impl Material {
         let tint = Vector3::new(1.0, 1.0, 1.0).lerp(&self.color, volume);
         BSDF {
             direction: exited,
-            signal: tint,
-            reflected: true
+            signal: tint
         }
     }
 }

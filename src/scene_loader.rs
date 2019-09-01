@@ -18,7 +18,7 @@ fn load_spheres_scene() -> Scene {
         Vector3::new(0.0, 0.0, 0.0),
         1.0,
         1.0,
-        Vector3::new(3000.0, 3000.0, 3000.0),
+        Vector3::new(500.0, 500.0, 500.0),
         Vector3::new(0.0, 0.0, 0.0),
         0.0,
         0.0
@@ -121,7 +121,7 @@ fn load_box_scene() -> Scene {
         Vector3::new(0.0, 0.0, 0.0),
         1.0,
         1.0,
-        Vector3::new(1000.0, 1000.0, 1000.0),
+        Vector3::new(355.0, 355.0, 355.0),
         Vector3::new(0.0, 0.0, 0.0),
         0.0,
         0.0

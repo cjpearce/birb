@@ -62,9 +62,8 @@ impl Tracer {
     }
 
     pub fn update(&mut self, pixels: &mut [u8]) {
-        let limit = (self.index / (self.width * self.height)) + 1;
         let pixel = self.pixel_for_index(self.index);
-        self.expose(pixel, limit);
+        self.expose(pixel);
 
         let color = self.exposures.color_at(pixel.x + pixel.y * self.width);
 
@@ -82,88 +81,26 @@ impl Tracer {
         Point2::new(wrapped % self.width, wrapped / self.width)
     }
 
-    fn expose(&mut self, pixel: Point2<usize>, limit: usize) {
+    fn expose(&mut self, pixel: Point2<usize>) {
         let rgba_index = pixel.x + pixel.y * self.width;
-        for _ in 0..limit {
-            let ray = self
-                .scene
-                .camera
-                .ray(pixel.x, pixel.y, self.width, self.height);
-            let sample = self.trace(ray, 4, 0, true);
-            self.exposures.add_sample(rgba_index as usize, sample);
-        }
+        let ray = self
+            .scene
+            .camera
+            .ray(pixel.x, pixel.y, self.width, self.height);
+        let sample = self.trace(ray, 1, 0);
+        self.exposures.add_sample(rgba_index as usize, sample);
     }
 
-    fn sample_lights(&self, intersection: &Intersection, direction: Vector3<f64>) -> Vector3<f64> {
-        let light = self.scene.light();
-
-        // get bounding sphere center and radius
-        let center = light.center();
-        let radius = light.radius();
-
-        // get random point in disk
-        let point = loop {
-            let x = rand::random::<f64>() * 2.0 - 1.0;
-            let y = rand::random::<f64>() * 2.0 - 1.0;
-            if x*x + y*y <= 1.0 {
-                let l = (center - intersection.hit).normalize();
-                let u = l.cross(&Vector3::random_in_sphere()).normalize();
-                let v = l.cross(&u);
-
-                break center + (u * x * radius) + (v * y * radius);
-            }
-        };
-
-        // construct ray toward light point
-        let ray = Ray{
-            origin: intersection.hit,
-            direction: (point - intersection.hit).normalize()
-        };
-
-        let cos_angle = ray.direction.dot(&intersection.normal);
-        if cos_angle <= 0.0 {
-            return Vector3::new(0.0, 0.0, 0.0);
-        }
-
-        // check for light visibility
-        let hit = self.scene.intersect(&ray);
-        if hit.is_none() || hit.unwrap().object != light {
-            return Vector3::new(0.0, 0.0, 0.0);
-        }
-
-        // compute solid angle (hemisphere coverage)
-        let hyp = (center - intersection.hit).norm();
-        let opp = radius;
-        let theta = (opp / hyp).asin();
-        let adj = opp / theta.tan();
-        let d = theta.cos() * adj;
-        let r = theta.sin() * adj;
-
-        let coverage = if hyp < opp {
-            1.0
-        } else {
-            f64::min((r * r) / (d * d), 1.0)
-        };
-
-        light.material().emit() * coverage
-    }
-
-    fn trace(&mut self, ray: Ray, samples: u32, depth: u32, emmission: bool) -> Vector3<f64> {
-
-        if depth == self.bounces {
+    fn trace(&mut self, ray: Ray, samples: u32, depth: u32) -> Vector3<f64> {
+        if depth > self.bounces {
             return Vector3::new(0.0, 0.0, 0.0);
         }
 
         if let Some(intersect) = self.scene.intersect(&ray) {
             let mut energy = Vector3::new(0.0, 0.0, 0.0);
             let n = f64::from(samples).sqrt() as u32;
-            let direct = self.sample_lights(&intersect, ray.direction);
 
-            if emmission {
-                // return Vector3::new(0.0, 0.0, 0.0);
-                energy += intersect.material.emit() * f64::from(n*n);
-            }
-
+            energy += intersect.material.emit() * f64::from(n*n);
 
             for u in 0..n {
                 for v in 0..n {
@@ -172,16 +109,11 @@ impl Tracer {
 
                     let sample = intersect
                         .material
-                        .bsdf(&intersect.normal, &ray.direction, intersect.distance, fu, fv);
+                        .bsdf(&intersect.normal, &ray.direction, intersect.distance, fu, fv, &self.scene, &intersect);
 
                     let ray = Ray{origin: intersect.hit, direction: sample.direction};
-                    let indirect = self.trace(ray, 1, depth + 1, sample.reflected);
-
+                    let indirect = self.trace(ray, 1, depth + 1);
                     energy += indirect.component_mul(&sample.signal);
-
-                    if !sample.reflected {
-                        energy += direct.component_mul(&sample.signal); 
-                    }
                 }
             }
 

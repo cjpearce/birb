@@ -14,7 +14,7 @@ pub mod tracer;
 
 #[wasm_bindgen(start)]
 pub fn start() {
-    let scene = scene_loader::load_scene("spheres").unwrap();
+    let scene = scene_loader::load_scene("box").unwrap();
     let canvas_renderer = CanvasRenderer::new("canvas");
 
     let tracer = Tracer::new(

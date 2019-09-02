@@ -1,9 +1,10 @@
-use nalgebra::{geometry::Reflection, Unit, Vector3};
+use nalgebra::{geometry::Reflection, Unit, Vector3, Point3};
 use crate::ray::{DirectionExt, Ray};
 use crate::scene::{Scene, Intersection};
 use crate::onb::{OrthonormalBasis};
 use rand;
 use std::f64;
+
 
 pub struct BSDF {
     pub direction: Vector3<f64>,
@@ -89,91 +90,13 @@ impl Material {
 
     fn diffused(&self, normal: &Vector3<f64>, u: f64, v: f64, scene: &Scene,
         intersect: &Intersection) -> BSDF {
-        let pa = 1.0;
-        let a = self.cos_biased_diffused(normal, u, v);
-        let b = self.light_biased_diffused(scene, intersect);
-
-        // TODO: Bug here with cos biassed diffuse light not being bright enough
-        // TODO: Mixing needs to be done by feeding the generated vector into the pdf
-        // for both individually, so they can't be precomputed as they're being done
-        // here
-        if rand::random::<f64>() <= pa {
-            BSDF {
-                direction: a.direction,
-                signal: pa * a.signal + (1.0-pa) * b.signal
-            }
-        } else {
-            BSDF {
-                direction: b.direction,
-                signal: pa * a.signal + (1.0-pa) * b.signal
-            }
-        }
-    }
-
-    fn cos_biased_diffused(&self, normal: &Vector3<f64>, u: f64, v: f64) -> BSDF {
-        let vec = Vector3::random_in_cos_hemisphere(u, v);
-        let onb = OrthonormalBasis::from_normal(*normal);
-        let direction = onb.local(vec);
-        let cosine = direction.dot(&normal);
-        let p = if cosine > 0.0 { cosine / std::f64::consts::PI } else { 0.0 };
-
+        let a = CosWeightedDiffuse::new(*normal, u, v);
+        let b = LightWeightedDiffuse::new(intersect.hit, *normal, scene);
+        let mix = MixturePdf::new(0.5, &a, &b);
+        let direction = mix.gen();
         BSDF {
             direction,
-            signal: self.color * p
-        }
-    }
-
-    fn light_biased_diffused(&self, scene: &Scene, intersection: &Intersection) -> BSDF {
-        let light = scene.light();
-
-        // get bounding sphere center and radius
-        let center = light.center();
-        let radius = light.radius();
-
-        // get random point in disk
-        let point = loop {
-            let x = rand::random::<f64>() * 2.0 - 1.0;
-            let y = rand::random::<f64>() * 2.0 - 1.0;
-            if x*x + y*y <= 1.0 {
-                let l = (center - intersection.hit).normalize();
-                let u = l.cross(&Vector3::random_in_sphere()).normalize();
-                let v = l.cross(&u);
-
-                break center + (u * x * radius) + (v * y * radius);
-            }
-        };
-
-        // construct ray toward light point
-        let ray = Ray{
-            origin: intersection.hit,
-            direction: (point - intersection.hit).normalize()
-        };
-
-        let cos_angle = ray.direction.dot(&intersection.normal);
-        if cos_angle <= 0.0 {
-            return BSDF {
-                direction: ray.direction,
-                signal: Vector3::new(0.0, 0.0, 0.0)
-            }
-        }
-
-        // compute solid angle (hemisphere coverage)
-        let hyp = (center - intersection.hit).norm();
-        let opp = radius;
-        let theta = (opp / hyp).asin();
-        let adj = opp / theta.tan();
-        let d = theta.cos() * adj;
-        let r = theta.sin() * adj;
-
-        let p = if hyp < opp {
-            1.0
-        } else {
-            f64::min((r * r) / (d * d), 1.0)
-        };
-
-        BSDF {
-            direction: ray.direction,
-            signal: self.color * p
+            signal: self.color * mix.p(direction)
         }
     }
 
@@ -202,6 +125,129 @@ impl Material {
             direction: exited,
             signal: tint
         }
+    }
+}
+
+trait Pdf {
+    fn p(&self, v: Vector3<f64>) -> f64;
+    fn gen(&self) -> Vector3<f64>;
+}
+
+struct MixturePdf<'a, 'b> {
+    mix: f64,
+    a: &'a Pdf,
+    b: &'b Pdf
+}
+
+impl <'a, 'b> MixturePdf<'a, 'b> {
+    fn new(mix: f64, a: &'a Pdf, b: &'b Pdf) -> Self {
+        Self{mix, a, b}
+    }
+}
+
+impl <'a, 'b> Pdf for MixturePdf<'a, 'b> {
+    fn p(&self, v: Vector3<f64>) -> f64 {
+        (1.0 - self.mix) * self.a.p(v) + self.mix * self.b.p(v)
+    }
+
+    fn gen(&self) -> Vector3<f64> {
+        if rand::random::<f64>() <= self.mix {
+            self.a.gen()
+        } else {
+            self.b.gen()
+        }
+    }
+}
+
+
+struct CosWeightedDiffuse {
+    u: f64,
+    v: f64,
+    normal: Vector3<f64>
+}
+
+impl CosWeightedDiffuse {
+    fn new(normal: Vector3<f64>, u: f64, v: f64) -> Self {
+        Self{u, v, normal}
+    }
+}
+
+impl Pdf for CosWeightedDiffuse {
+    fn p(&self, v: Vector3<f64>) -> f64 {
+        let cosine = v.dot(&self.normal);
+        if cosine > 0.0 { cosine / std::f64::consts::PI } else { 0.0 }
+    }
+
+    fn gen(&self) -> Vector3<f64> {
+        let vec = Vector3::random_in_cos_hemisphere(self.u, self.v);
+        let onb = OrthonormalBasis::from_normal(self.normal);
+        onb.local(vec)
+    }
+}
+
+struct LightWeightedDiffuse<'a> {
+    point: Point3<f64>,
+    normal: Vector3<f64>,
+    scene: &'a Scene
+}
+
+impl <'a> LightWeightedDiffuse<'a> {
+    fn new(point: Point3<f64>, normal: Vector3<f64>, scene: &'a Scene) -> Self {
+        Self{point, normal, scene}
+    }
+}
+
+impl <'a> Pdf for LightWeightedDiffuse<'a> {
+    fn p(&self, v: Vector3<f64>) -> f64 {
+        let light = self.scene.light();
+
+        // get bounding sphere center and radius
+        let center = light.center();
+        let radius = light.radius();
+
+
+        let cos_angle = v.dot(&self.normal);
+        if cos_angle <= 0.0 {
+            return 0.0;
+        }
+
+        // compute solid angle (hemisphere coverage)
+        let hyp = (center - self.point).norm();
+        let opp = radius;
+        let theta = (opp / hyp).asin();
+        let adj = opp / theta.tan();
+        let d = theta.cos() * adj;
+        let r = theta.sin() * adj;
+
+        if hyp < opp {
+            1.0
+        } else {
+            f64::min((r * r) / (d * d), 1.0)
+        }
+    }
+
+    fn gen(&self) -> Vector3<f64> {
+        let light = self.scene.light();
+
+        // get bounding sphere center and radius
+        let center = light.center();
+        let radius = light.radius();
+
+        // get random point in disk
+        let point = loop {
+            let x = rand::random::<f64>() * 2.0 - 1.0;
+            let y = rand::random::<f64>() * 2.0 - 1.0;
+            if x*x + y*y <= 1.0 {
+                let l = (center - self.point).normalize();
+                let u = l.cross(&Vector3::random_in_sphere()).normalize();
+                let v = l.cross(&u);
+
+                break center + (u * x * radius) + (v * y * radius);
+            }
+        };
+
+        // construct ray toward light point
+        (point - self.point).normalize()
     }
 }
 

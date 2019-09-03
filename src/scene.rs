@@ -5,11 +5,11 @@ use crate::sphere::Sphere;
 use nalgebra::{Point3, Vector3};
 
 #[derive(Copy, Clone)]
-pub struct Intersection {
+pub struct Intersection<'a> {
     pub hit: Point3<f64>,
     pub normal: Vector3<f64>,
-    pub material: Material,
-    pub object: Sphere,
+    pub material: &'a Material,
+    pub object: &'a Sphere,
     pub distance: f64,
 }
 
@@ -43,9 +43,9 @@ impl Scene {
             Intersection {
                 hit: point,
                 normal,
-                material: *hit.object.material(),
+                material: hit.object.material(),
                 distance: hit.distance,
-                object: *hit.object
+                object: hit.object
             }
         })
     }

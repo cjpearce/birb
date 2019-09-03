@@ -92,7 +92,7 @@ impl Material {
         intersect: &Intersection) -> BSDF {
         let a = CosWeightedDiffuse::new(*normal, u, v);
         let b = LightWeightedDiffuse::new(intersect.hit, *normal, scene);
-        let mix = MixturePdf::new(0.5, &a, &b);
+        let mix = MixturePdf::new(1.0, &a, &b);
         let direction = mix.gen();
         BSDF {
             direction,
@@ -152,9 +152,9 @@ impl <'a, 'b> Pdf for MixturePdf<'a, 'b> {
 
     fn gen(&self) -> Vector3<f64> {
         if rand::random::<f64>() <= self.mix {
-            self.a.gen()
-        } else {
             self.b.gen()
+        } else {
+            self.a.gen()
         }
     }
 }

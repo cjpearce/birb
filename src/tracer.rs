@@ -87,39 +87,46 @@ impl Tracer {
             .scene
             .camera
             .ray(pixel.x, pixel.y, self.width, self.height);
-        let sample = self.trace(ray, 1, 0);
+        let sample = self.trace(ray, 1);
         self.exposures.add_sample(rgba_index as usize, sample);
     }
 
-    fn trace(&mut self, ray: Ray, samples: u32, depth: u32) -> Vector3<f64> {
-        if depth > self.bounces {
-            return Vector3::new(0.0, 0.0, 0.0);
-        }
+    fn trace(&mut self, mut ray: Ray, samples: u32) -> Vector3<f64> {
+        let mut total_energy = Vector3::new(0.0, 0.0, 0.0);
+        let n = f64::from(samples).sqrt() as u32;
+        for u in 0..n {
+            for v in 0..n {
+                let mut energy = Vector3::new(0.0, 0.0, 0.0);
+                let mut signal = Vector3::new(1.0, 1.0, 1.0);
 
-        if let Some(intersect) = self.scene.intersect(&ray) {
-            let mut energy = Vector3::new(0.0, 0.0, 0.0);
-            let n = f64::from(samples).sqrt() as u32;
+                for bounce in 0..self.bounces {
+                    let (fu, fv) = if bounce == 0 {
+                        ((f64::from(u) + rand::random::<f64>()) / f64::from(n),
+                        (f64::from(v) + rand::random::<f64>()) / f64::from(n))
+                    } else {
+                        (rand::random::<f64>(), rand::random::<f64>())
+                    };
+            
+                    if let Some(intersect) = self.scene.intersect(&ray) {
+                        let sample = intersect
+                            .material
+                            .bsdf(&intersect.normal, &ray.direction, intersect.distance, fu, fv, &self.scene, &intersect);
 
-            energy += intersect.material.emit() * f64::from(n*n);
+                        ray.origin = intersect.hit;
+                        ray.direction = sample.direction;
+                        signal = signal.component_mul(&sample.signal);
 
-            for u in 0..n {
-                for v in 0..n {
-                    let fu = (f64::from(u) + rand::random::<f64>()) / f64::from(n);
-                    let fv = (f64::from(v) + rand::random::<f64>()) / f64::from(n);
-
-                    let sample = intersect
-                        .material
-                        .bsdf(&intersect.normal, &ray.direction, intersect.distance, fu, fv, &self.scene, &intersect);
-
-                    let ray = Ray{origin: intersect.hit, direction: sample.direction};
-                    let indirect = self.trace(ray, 1, depth + 1);
-                    energy += indirect.component_mul(&sample.signal);
+                        energy += intersect.material.emit().component_mul(&signal);
+                    } else {
+                        energy += self.scene.bg(&ray).component_mul(&signal);
+                        break;
+                    }
                 }
-            }
 
-            energy / f64::from(n*n)
-        } else {
-            self.scene.bg(&ray)
+                total_energy += energy;
+            }
         }
+
+        total_energy / f64::from(n*n)
     }
 }

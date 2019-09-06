@@ -205,7 +205,6 @@ impl <'a> Pdf for LightWeightedDiffuse<'a> {
         let center = light.center();
         let radius = light.radius();
 
-
         let cos_angle = v.dot(&self.normal);
         if cos_angle <= 0.0 {
             return 0.0;
@@ -219,10 +218,18 @@ impl <'a> Pdf for LightWeightedDiffuse<'a> {
         let d = theta.cos() * adj;
         let r = theta.sin() * adj;
 
-        if hyp < opp {
+        let coverage = if hyp < opp {
             1.0
         } else {
             f64::min((r * r) / (d * d), 1.0)
+        };
+
+        let a = (center - self.point).angle(&v);
+
+        if a < radius {
+            coverage / std::f64::consts::PI
+        } else {
+            0.0
         }
     }
 

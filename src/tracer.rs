@@ -114,9 +114,8 @@ impl Tracer {
 
                         ray.origin = intersect.hit;
                         ray.direction = sample.direction;
-                        signal = signal.component_mul(&sample.signal);
-
                         energy += intersect.material.emit().component_mul(&signal);
+                        signal = signal.component_mul(&sample.signal);
                     } else {
                         energy += self.scene.bg(&ray).component_mul(&signal);
                         break;
